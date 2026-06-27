@@ -1,0 +1,131 @@
+﻿<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=gb2312">
+<title>·ðÀúÍòÄêÀú£¬·ð½ÌÈÕÀú²éÑ¯</title>
+<SCRIPT src="module_foli.js" type="text/javascript"></SCRIPT>
+<SCRIPT language=VBScript>
+<!--
+//===== ËãÊÀ½çÊ±¼ä
+Function TimeAdd(UTC,T)
+   Dim PlusMinus, DST, y
+   If Left(T,1)="-" Then PlusMinus = -1 Else PlusMinus = 1
+   UTC=Right(UTC,Len(UTC)-5)
+   UTC=Left(UTC,Len(UTC)-4)
+   y = Year(UTC)
+   TimeAdd=DateAdd("n", (Cint(Mid(T,2,2))*60 + Cint(Mid(T,4,2))) * PlusMinus, UTC)
+   //ÃÀ¹úÈÕ¹â½ÚÔ¼ÆÚ¼ä: 4ÔÂµÚÒ»¸öÐÇÈÕ00:00 ÖÁ 10ÔÂ×îºóÒ»¸öÐÇÆÚÈÕ00:00
+   If Mid(T,6,1)="*" And DateSerial(y,4,(9 - Weekday(DateSerial(y,4,1)) mod 7) ) <= TimeAdd And DateSerial(y,10,31 - Weekday(DateSerial(y,10,31))) >= TimeAdd Then
+      TimeAdd=CStr(DateAdd("h", 1, TimeAdd))
+      tSave.innerHTML = "R"
+   Else
+      tSave.innerHTML = ""
+   End If
+   TimeAdd = CStr(TimeAdd)
+End Function
+-->
+</SCRIPT>
+</head>
+<BODY onload=initial()>
+<DIV id=detail style="POSITION: absolute"></DIV>
+<div id="foli_body">
+<FORM name=CLD>
+<TABLE>
+  <TBODY>
+  <TR>
+    <TD vAlign=top align=middle><BR><FONT style="FONT-SIZE: 9pt" 
+      size=2>±¾µØÊ±¼ä:</FONT><BR><FONT id=Clock face=Arial color=#000080 size=4 
+      align="center">&nbsp;</FONT> 
+      <P><!--Ê±Çø *±íÊ¾×Ô¶¯µ÷ÕûÎªÈÕ¹â½ÚÔ¼Ê±¼ä--><FONT style="FONT-SIZE: 9pt" size=2><SELECT 
+      style="FONT-SIZE: 9pt" onchange=changeTZ() name=TZ> <OPTION 
+        value="-1200 °²ÄáÍþÍÁ¿Ë¡¢¹Ï¼×À¼" selected>¹ú¼Ê»»ÈÕÏß<OPTION 
+        value="-1100 ÖÐÍ¾µº¡¢ÈøÄ¦ÑÇÈºµº">ÈøÄ¦ÑÇ<OPTION value="-1000 ÏÄÍþÒÄ">ÏÄÍþÒÄ<OPTION 
+        value=-0900*°¢À­Ë¹¼Ó>°¢À­Ë¹¼Ó<OPTION value=-0800*Ì«Æ½ÑóÊ±¼ä(ÃÀ¼Ó)¡¢ÌáÑÇÄÉ>Ì«Æ½Ñó<OPTION 
+        value="-0700 ÑÇÀúÉ£ÄÇ">ÃÀ¹úÉ½Çø<OPTION value=-0700*É½ÇøÊ±¼ä(ÃÀ¼Ó)>ÃÀ¼ÓÉ½Çø<OPTION 
+        value=-0600*Èø¿ËÆäÍò(¼ÓÄÃ´ó)>¼ÓÄÃ´óÖÐ²¿<OPTION value=-0600*Ä«Î÷¸çÊÐ¡¢Ëþ¿ËÎ÷¿¨ÅÁ>Ä«Î÷¸ç<OPTION 
+        value=-0600*ÖÐ²¿Ê±¼ä(ÃÀ¼Ó)>ÃÀ¼ÓÖÐ²¿<OPTION value=-0500*²¨¸ç´ó¡¢ÀïÂê>ÄÏÃÀÖÞÌ«Æ½Ñó<OPTION 
+        value=-0500*¶«²¿Ê±¼ä(ÃÀ¼Ó)>ÃÀ¼Ó¶«²¿<OPTION value=-0500*Ó¡µÚ°²ÄÉ(¶«²¿)>ÃÀ¶«<OPTION 
+        value=-0400*¼ÓÀ­¿¨Ë¹¡¢À­ÅÁ×È>ÄÏÃÀÖÞÎ÷²¿<OPTION value="-0400*´óÎ÷ÑóÊ±¼ä ¼ÓÄÃ´ó)">´óÎ÷Ñó<OPTION 
+        value="-0330 ÐÂµº(¼ÓÄÃ´ó¶«°¶)">Å¦·ÒÀ¼<OPTION value="-0300 ²¨Î÷ÄáÑÇ">¶«ÄÏÃÀÖÞ<OPTION 
+        value="-0300 ²¼Â³ÅµË¹°®ÀöË¹¡¢ÇÇÖÎ³Ç">ÄÏÃÀÖÞ¶«²¿<OPTION value=-0200*´óÎ÷ÑóÖÐ²¿>´óÎ÷ÑóÖÐ²¿<OPTION 
+        value=-0100*ÑÇËÙ¶ûÈºµº¡¢Î¬µÂ½ÇÈºµº>ÑÇËÙ¶û<OPTION 
+        value="+0000 ¸ñÁÖÍþÖÎÊ±¼ä¡¢¶¼°ØÁÖ¡¢°®¶¡±¤¡¢Â×¶Ø">Ó¢¹úÏÄÁî<OPTION 
+        value="+0000 ÄªÂåÎ¬ÑÇ(Àµ±ÈÈðÑÇ)¡¢¿¨Èø²¼À¼¿¨">¸ñÁÖÍþÖÎ±ê×¼<OPTION 
+        value="+0100 °ÍÀè¡¢ÂíµÂÀï">ÂÞÂí<OPTION value="+0100 ²¼À­¸ñ, »ªÉ³, ²¼´ïÅåË¹">ÖÐÅ·<OPTION 
+        value="+0100 °ØÁÖ¡¢Ë¹µÂ¸ç¶ûÄ¦¡¢ÂÞÂí¡¢²®¶÷¡¢²¼Â³Èü¶û¡¢Î¬Ò²ÄÉ">Î÷Å·<OPTION 
+        value="+0200 ÒÔÉ«ÁÐ">ÒÔÉ«ÁÐ<OPTION value=+0200*¶«Å·>¶«Å·<OPTION 
+        value=+0200*¿ªÂÞ>°£¼°<OPTION value=+0200*ÑÅµä¡¢ºÕ¶ûÐÁ»ù¡¢ÒÁË¹Ì¹±¤>GFT<OPTION 
+        value=+0200*ºÕÀ­À×¡¢Æ¤ÍÐÀï>ÄÏ·Ç<OPTION 
+        value=+0300*°Í¸ñ´ï¡¢¿ÆÍþÌØ¡¢ÄÎÂå±È(¿ÏÑÇ)¡¢ÀïÑÅµÂ(É³ÎÚµØ)>É³ÎÚµØ°¢À­²®<OPTION 
+        value=+0300*ÄªË¹¿Æ¡¢Ê¥±ËµÃ±¤¡¢ºØÕ¼¡¢ÎÑÍß¸ñÈðµÂ>¶íÂÞË¹<OPTION value=+0330*µÂºÚÀ¼>ÒÁÀÊ<OPTION 
+        value=+0400*°¢²¼´ï±È(¶«°¢À­²®)¡¢ÄªË¹¿­¡¢Ëþ²¼ÀíË¹(ÇÇÖÎÑÇ¹²ºÍ)>°¢À­²®<OPTION 
+        value=+0430*¿¦²¼¶û>°¢¸»º¹<OPTION value="+0500 ÒÁË¹À¼Âí°ÍµÂ¡¢¿ËÂåÆæ¡¢ÒÁ¿¨ÌØÁÖ±¤¡¢ËþÐë¿Ï">Î÷ÑÇ<OPTION 
+        value="+0530 ÃÏÂò¡¢¼Ó¶û¸÷´ð¡¢Âí´¹Ë¹¡¢ÐÂµÂÀï¡¢¿ÉÂ×ÆÂ">Ó¡¶È<OPTION 
+        value="+0600 °¢ÂíÌá¡¢´ï¿¨">ÖÐÑÇ<OPTION value="+0700 Âü¹È¡¢ÑÇ¼Ó´ï¡¢ºúÖ¾Ã÷ÊÐ">Âü¹È<OPTION 
+        value="+0800 ±±¾©¡¢ÖØÇì¡¢ºÚÁú½­">ÖÐ¹ú<OPTION value="+0800 Ì¨Íå¡¢Ïã¸Û¡¢ÐÂ¼ÓÆÂ">Ì¨±±<OPTION 
+        value="+0900 ¶«¾©¡¢´óÚæ¡¢Ôú»Ï¡¢ºº³Ç¡¢ÑÇ¿â×È(¶«Î÷²®ÀûÑÇ)">¶«¾©<OPTION 
+        value="+0930 ´ï¶ûÎÄ">°ÄÖÞÖÐ²¿<OPTION value="+1000 ²¼ÀïË¹±¾¡¢Ä«¶û±¾¡¢Ï¯µÂÄá">Ï¯µÂÄá<OPTION 
+        value="+1000 »ô°ÍÌØ">ËþË¹Ã·ÄáÑÇ<OPTION value="+1000 ¹Øµº¡¢ÄªË¹±È¸Û¡¢º£ÊQÍþ">Î÷Ì«Æ½Ñó<OPTION 
+        value=+1100*Âí¸ç´ó¡¢ËùÂÞÃÅÈºµº¡¢ÐÂ¿¨Â×¶àÄáÑÇ>Ì«Æ½ÑóÖÐ²¿<OPTION 
+        value="+1200 ÍþÁé¶Ù¡¢°Â¿ËÀ¼">Å¦Î÷À¼<OPTION 
+      value="+1200 ì³¼Ã¡¢¿Ï¼ÓËþ¡¢ÂíÐª¶ûÈºµº">ì³¼Ã</OPTION></SELECT>Ê±¼ä</FONT> <FONT id=tSave 
+      style="FONT-SIZE: 18pt; COLOR: red; FONT-FAMILY: Wingdings"></FONT><BR><BR><FONT 
+      style="FONT-SIZE: 120pt; COLOR: green; FONT-FAMILY: Webdings">&ucirc;</FONT><BR><FONT 
+      id=CITY 
+      style="FONT-SIZE: 9pt; WIDTH: 150px; COLOR: blue; FONT-FAMILY: 'ÐÂÏ¸Ã÷Ìå'"></FONT></P></TD>
+    <TD align=middle>
+      <DIV style="Z-INDEX: -1; POSITION: absolute; TOP: 45px"><FONT id=YMBG 
+      style="FONT-SIZE: 100pt; COLOR: #f0f0f0; FONT-FAMILY: 'Arial Black'">&nbsp;0000<BR>&nbsp;JUN</FONT> 
+      </DIV>
+      <TABLE border=0>
+        <TBODY>
+        <TR>
+          <TD bgColor=#000080 colSpan=7><FONT style="FONT-SIZE: 9pt" 
+            color=#ffffff size=2>Î÷Àú<SELECT style="FONT-SIZE: 9pt" 
+            onchange=changeCld() name=SY> 
+              <SCRIPT language=JavaScript><!-- 
+              for(i=1900;i<2050;i++) document.write('<option>'+i) 
+            //--></SCRIPT>
+            </SELECT>Äê<SELECT style="FONT-SIZE: 9pt" onchange=changeCld() 
+            name=SM> 
+              <SCRIPT language=JavaScript><!-- 
+              for(i=1;i<13;i++) document.write('<option>'+i) 
+            //--></SCRIPT>
+            </SELECT>ÔÂ</FONT> <FONT id=GZ face=±ê¿¬Ìå color=#ffffff 
+            size=4>&nbsp;</FONT><BR></TD></TR>
+        <TR align=middle bgColor=#e0e0e0>
+          <TD width=54>ÈÕ</TD>
+          <TD width=54>Ò»</TD>
+          <TD width=54>¶þ</TD>
+          <TD width=50>Èý</TD>
+          <TD width=54>ËÄ</TD>
+          <TD width=54>Îå</TD>
+          <TD width=54>Áù</TD></TR>
+        <SCRIPT language=JavaScript><!-- 
+          var gNum 
+          for(i=0;i<6;i++) { 
+            document.write('<tr align=center>') 
+            for(j=0;j<7;j++) { 
+              gNum = i*7+j 
+              document.write('<td id="GD' + gNum +'" onMouseOver="mOvr(' + gNum +')" onMouseOut="mOut()"><font id="SD' + gNum +'" size=5 face="Arial Black"') 
+              if(j == 0 || j == 6) document.write(' color=red')  //á»Û - ï@Ê¾ËùÓÐßLÁùÈÕÆÚé¼tÉ«
+              //if(j == 6) 
+              //  if(i%2==1) document.write(' color=red') 
+              //  else document.write(' color=green') 
+              document.write(' TITLE=""> </font><br><font id="LD' + gNum + '" size=2 style="font-size:9pt"> </font></td>') 
+            } 
+            document.write('</tr>') 
+          } 
+        //--></SCRIPT>
+        </TBODY></TABLE></TD>
+    <TD vAlign=top align=middle width=60><BR><BR><BR><BR><BUTTON 
+      style="FONT-SIZE: 9pt" onclick="pushBtm('YU')">Äê¡ø</BUTTON> <BR><BUTTON 
+      style="FONT-SIZE: 9pt" onclick="pushBtm('YD')">Äê¨</BUTTON> 
+      <P><BUTTON style="FONT-SIZE: 9pt" onclick="pushBtm('MU')">ÔÂ¡ø</BUTTON> 
+      <BR><BUTTON style="FONT-SIZE: 9pt" onclick="pushBtm('MD')">ÔÂ¨</BUTTON> 
+      <P><BUTTON style="FONT-SIZE: 9pt" onclick="pushBtm('')">µ±ÔÂ</BUTTON> 
+      </TD></TR></TBODY></TABLE></FORM>
+</div>
+<script defer src="https://static.cloudflareinsights.com/beacon.min.js/v833ccba57c9e4d2798f2e76cebdd09a11778172276447" integrity="sha512-57MDmcccJXYtNnH+ZiBwzC4jb2rvgVCEokYN+L/nLlmO8rfYT/gIpW2A569iJ/3b+0UEasghjuZH/ma3wIs/EQ==" data-cf-beacon='{"version":"2024.11.0","token":"3ea64757115f47a98feed596f58c117b","r":1,"server_timing":{"name":{"cfCacheStatus":true,"cfEdge":true,"cfExtPri":true,"cfL4":true,"cfOrigin":true,"cfSpeedBrain":true},"location_startswith":null}}' crossorigin="anonymous"></script>
+</body>
+</html>
