@@ -961,7 +961,7 @@
 
         .font-size-panel {
             position: absolute;
-            bottom: 80px;
+            top: 76px;
             left: 50%;
             transform: translateX(-50%);
             background: rgba(255, 255, 255, 0.95);
@@ -976,7 +976,7 @@
         }
 
         .font-size-panel.reader-panel-hidden {
-            transform: translateX(-50%) translateY(20px);
+            transform: translateX(-50%) translateY(-20px);
             opacity: 0;
             pointer-events: none;
         }
@@ -2614,6 +2614,8 @@
                 </div>
             </div>
 
+            <div class="counter-selector" id="counterSelector"></div>
+
             <div class="counter-count-row">
                 <div class="number-wrap">
                     <div class="number-display" id="numberDisplay">0</div>
@@ -2637,8 +2639,6 @@
                 <button id="soundToggleBtn"><i class="fas fa-play"></i> 声音</button>
                 <button id="importAudioBtn"><i class="fas fa-file-audio"></i> 导入</button>
             </div>
-
-            <div class="counter-selector" id="counterSelector"></div>
 
             <div class="bg-preview" id="bgPreview">
                 <span>🌸 水墨莲花</span>
@@ -3454,7 +3454,7 @@
             let readerUiHideTimer = null;
             let fontPanelHideTimer = null;
             let speechSpeedPanelHideTimer = null;
-            const READER_UI_HIDE_DELAY = 1500; // 1.5s 延时，类似常见阅读器
+            const READER_UI_HIDE_DELAY = 2500; // 2.5s 延时（字体弹窗与上下功能栏隐藏时间各延长 1 秒，给用户足够时间操作）
 
             function showReaderUI() {
                 const reader = document.getElementById('fullscreenReader');
@@ -3490,6 +3490,8 @@
                 const panel = document.getElementById('fontSizePanel');
                 if (panel) panel.classList.remove('reader-panel-hidden');
                 if (fontPanelHideTimer) clearTimeout(fontPanelHideTimer);
+                // 显示字体弹窗时同步重置工具栏与弹窗的隐藏倒计时，避免用户还没点就隐藏
+                startReaderUiHideTimer();
             }
 
             function hideFontPanel() {
@@ -5009,15 +5011,30 @@
             }
 
             function toggleSpeech() {
-                if (!hasSpeech()) return;
+                // 优先使用 Android 原生 TTS（继承系统离线中文语音包），不依赖 Web Speech API
+                const nativeTts = (typeof AndroidBridge !== 'undefined' && AndroidBridge && typeof AndroidBridge.speak === 'function');
                 if (isSpeaking && !isPaused) {
-                    if (typeof speechSynthesis.pause === 'function') { speechSynthesis.pause(); }
-                    isPaused = true;
-                    updateSpeechUI();
+                    // 正在朗读 → 暂停（原生 TTS 无可靠暂停/恢复，stop 后标记暂停，继续时重读当前页）
+                    if (nativeTts) {
+                        if (typeof AndroidBridge.stopSpeak === 'function') { try { AndroidBridge.stopSpeak(); } catch (e) {} }
+                        isPaused = true;
+                        updateSpeechUI();
+                    } else if (hasSpeech()) {
+                        if (typeof speechSynthesis.pause === 'function') { try { speechSynthesis.pause(); } catch (e) {} }
+                        isPaused = true;
+                        updateSpeechUI();
+                    }
                 } else if (isSpeaking && isPaused) {
-                    if (typeof speechSynthesis.resume === 'function') { speechSynthesis.resume(); }
-                    isPaused = false;
-                    updateSpeechUI();
+                    // 已暂停 → 继续
+                    if (nativeTts) {
+                        const s = sutraList[currentSutraIndex];
+                        const t = (sutraPages[currentPage] || '').replace(/<[^>]+>/g, '').replace(/&\w+;/g, '').trim();
+                        if (t) { AndroidBridge.speak(t, speechSpeed || 1.0, voiceGender || 'female'); isPaused = false; updateSpeechUI(); }
+                    } else if (hasSpeech()) {
+                        if (typeof speechSynthesis.resume === 'function') { try { speechSynthesis.resume(); } catch (e) {} }
+                        isPaused = false;
+                        updateSpeechUI();
+                    }
                 } else {
                     startSpeech();
                 }
@@ -5134,7 +5151,7 @@
 
             // 原生 TTS 朗读完成/出错时的回调
             window.__onTtsDone = function(utteranceId) {
-                if (!isSpeaking) return;
+                if (!isSpeaking || isPaused) return;
                 if (currentPage < totalPages - 1) {
                     currentPage++;
                     showPage(currentPage);
