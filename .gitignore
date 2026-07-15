@@ -1,0 +1,42 @@
+# ===== OS =====
+.DS_Store
+Thumbs.db
+ehthumbs.db
+
+# ===== Android build artifacts =====
+*.apk
+*.aab
+*.ap_
+android-app/.gradle/
+android-app/app/build/
+.gradle/
+build/
+build.log
+android-app/build.log
+
+# ===== Secrets / keystore =====
+*.jks
+*.keystore
+local.properties
+
+# ===== IDE =====
+.idea/
+*.iml
+
+# ===== Node =====
+node_modules/
+
+# ===== Temp / scratch =====
+*.tmp
+check_db.js
+
+# ===== One-off debug scripts & outputs (project root) =====
+find_sutra*.js
+find_output.txt
+query_chats.js
+read_sutra.js
+read_yaoshi*.js
+sutras_data_backup.js
+temp_check.js
+yaoshi_out*.txt
+yaoshi_sutra.txt
