@@ -43,6 +43,8 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.ByteArrayOutputStream;
+import org.json.JSONObject;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Locale;
@@ -53,6 +55,14 @@ import android.provider.OpenableColumns;
 import android.webkit.MimeTypeMap;
 import android.os.Environment;
 import android.widget.Toast;
+import org.json.JSONObject;
+import java.util.Date;
+import java.util.Properties;
+import javax.mail.Message;
+import javax.mail.Session;
+import javax.mail.Transport;
+import javax.mail.internet.InternetAddress;
+import javax.mail.internet.MimeMessage;
 import androidx.core.content.FileProvider;
 import java.net.HttpURLConnection;
 import java.net.URL;
@@ -395,6 +405,14 @@ public class MainActivity extends AppCompatActivity {
     public void onBackPressed() {
         if (webView != null && webView.canGoBack()) {
             webView.goBack();
+        } else if (webView != null) {
+            // 交给前端逐级返回：阅读器/弹窗→关闭，非首页→回首页；返回 true 表示已处理（留住 App）
+            webView.evaluateJavascript("window.__appBack ? window.__appBack() : false", value -> {
+                boolean handled = "true".equals(value);
+                if (!handled) {
+                    runOnUiThread(() -> super.onBackPressed());
+                }
+            });
         } else {
             super.onBackPressed();
         }
@@ -730,12 +748,33 @@ public class MainActivity extends AppCompatActivity {
                 }
                 try {
                     tts.setSpeechRate(rate > 0 ? rate : 1.0f);
-                    // 停止之前朗读，立即开始新内容（语言已在 initTTS 中设好）
+                    // 按性别选择中文语音；多数设备仅单一中文语音时，改用音高营造男/女声差异
+                    final boolean wantMale = "male".equals(gender);
+                    Voice selected = null;
+                    try {
+                        for (Voice v : tts.getVoices()) {
+                            if (v == null) continue;
+                            String nm = (v.getName() == null) ? "" : v.getName().toLowerCase();
+                            String loc = (v.getLocale() != null) ? v.getLocale().toString().toLowerCase() : "";
+                            boolean zh = loc.contains("zh") || nm.contains("chinese") || nm.contains("中文");
+                            if (!zh) continue;
+                            boolean male = nm.contains("male") || nm.contains("男") || nm.contains("yang") || nm.contains("yue");
+                            boolean female = nm.contains("female") || nm.contains("女") || nm.contains("ying") || nm.contains("xiaoxiao") || nm.contains("mei");
+                            if (wantMale && male) { selected = v; break; }
+                            if (!wantMale && female) { selected = v; break; }
+                        }
+                    } catch (Exception ignored) {}
+                    if (selected != null) { try { tts.setVoice(selected); } catch (Exception ignored) {} }
+                    // 音高：男声降低、女声略升（KEY_PARAM_PITCH 受主流 TTS 引擎支持）
+                    final float pitch = wantMale ? 0.6f : 1.12f;
                     tts.stop();
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-                        tts.speak(text, TextToSpeech.QUEUE_FLUSH, null, "sutra_" + System.currentTimeMillis());
+                        Bundle sp = new Bundle();
+                        sp.putString("pitch", String.valueOf(pitch));
+                        tts.speak(text, TextToSpeech.QUEUE_FLUSH, sp, "sutra_" + System.currentTimeMillis());
                     } else {
                         HashMap<String, String> params = new HashMap<>();
+                        params.put("pitch", String.valueOf(pitch));
                         params.put(TextToSpeech.Engine.KEY_PARAM_UTTERANCE_ID, "sutra_" + System.currentTimeMillis());
                         tts.speak(text, TextToSpeech.QUEUE_FLUSH, params);
                     }
@@ -785,6 +824,68 @@ public class MainActivity extends AppCompatActivity {
                     startActivity(intent);
                 } catch (Exception ignored) {}
             });
+        }
+
+        // 下载任意网页/直链文本内容（绕过 WebView 的 CORS 限制），结果经回调返回前端
+        @JavascriptInterface
+        public void fetchUrl(final String url) {
+            new Thread(() -> {
+                HttpURLConnection conn = null;
+                try {
+                    URL u = new URL(url);
+                    conn = (HttpURLConnection) u.openConnection();
+                    conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36");
+                    conn.setRequestProperty("Accept", "text/html,application/xhtml+xml,text/plain,application/json;q=0.9,*/*;q=0.8");
+                    conn.setConnectTimeout(15000);
+                    conn.setReadTimeout(20000);
+                    conn.setInstanceFollowRedirects(true);
+                    conn.connect();
+                    int code = conn.getResponseCode();
+                    if (code >= 300 && code < 400) {
+                        String loc = conn.getHeaderField("Location");
+                        if (loc != null && !loc.isEmpty()) {
+                            try { conn.disconnect(); } catch (Exception ignored) {}
+                            u = new URL(u, loc);
+                            conn = (HttpURLConnection) u.openConnection();
+                            conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36");
+                            conn.connect();
+                        }
+                    }
+                    String contentType = conn.getContentType();
+                    String charset = "UTF-8";
+                    if (contentType != null) {
+                        int idx = contentType.toLowerCase().indexOf("charset=");
+                        if (idx > 0) charset = contentType.substring(idx + 8).trim().split(";")[0];
+                    }
+                    InputStream in = conn.getInputStream();
+                    ByteArrayOutputStream baos = new ByteArrayOutputStream();
+                    byte[] buf = new byte[8192];
+                    int n; long total = 0;
+                    while ((n = in.read(buf)) > 0) {
+                        baos.write(buf, 0, n);
+                        total += n;
+                        if (total > 5_000_000) break; // 上限 5MB，避免超大页卡死
+                    }
+                    in.close();
+                    byte[] data = baos.toByteArray();
+                    // 未声明 charset 时，扫描 <meta> 嗅探 GBK 系列
+                    if (charset == null || charset.isEmpty() || charset.equalsIgnoreCase("UTF-8")) {
+                        String head = new String(data, 0, Math.min(data.length, 2048), java.nio.charset.StandardCharsets.ISO_8859_1).toLowerCase();
+                        if (head.contains("charset=gbk") || head.contains("charset=gb2312") || head.contains("charset=gb18030")) {
+                            charset = "GBK";
+                        }
+                    }
+                    final String body = new String(data, charset);
+                    final String safe = JSONObject.quote(body);
+                    final int len = body.length();
+                    runOnUiThread(() -> webView.evaluateJavascript("window.__lastFetch=" + safe + "; if(typeof window.__onFetchUrlDone==='function'){window.__onFetchUrlDone(true,''," + len + ");}", null));
+                } catch (final Exception e) {
+                    final String msg = (e != null && e.getMessage() != null) ? e.getMessage() : "下载失败";
+                    runOnUiThread(() -> webView.evaluateJavascript("if(typeof window.__onFetchUrlDone==='function'){window.__onFetchUrlDone(false," + JSONObject.quote(msg) + ",0);}", null));
+                } finally {
+                    if (conn != null) { try { conn.disconnect(); } catch (Exception ignored) {} }
+                }
+            }).start();
         }
 
         // 检查更新：下载 APK 并调起系统安装（参数 apkUrl 为可直接下载的 apk 地址）
@@ -859,6 +960,57 @@ public class MainActivity extends AppCompatActivity {
         @JavascriptInterface
         public void vibrate(long ms) {
             runOnUiThread(() -> doVibrate(ms));
+        }
+
+        // 意见反馈：内置 QQ 邮箱 SMTP 发送（授权码方式），后台线程执行，结果回传前端
+        @JavascriptInterface
+        public void sendFeedback(String name, String contact, String message, String version) {
+            final String n = (name == null) ? "" : name;
+            final String c = (contact == null) ? "" : contact;
+            final String m = (message == null) ? "" : message;
+            final String v = (version == null) ? "" : version;
+            new Thread(() -> {
+                try {
+                    sendFeedbackMail(n, c, m, v);
+                    runOnUiThread(() -> webView.evaluateJavascript(
+                        "if(window.__onFeedbackResult)window.__onFeedbackResult(true,'提交成功，南无阿弥陀佛，感谢您的反馈！');", null));
+                } catch (final Exception e) {
+                    final String err = (e != null && e.getMessage() != null) ? e.getMessage() : "发送失败";
+                    final String arg = org.json.JSONObject.quote(err);
+                    runOnUiThread(() -> webView.evaluateJavascript(
+                        "if(window.__onFeedbackResult)window.__onFeedbackResult(false," + arg + ");", null));
+                }
+            }).start();
+        }
+
+        private void sendFeedbackMail(String name, String contact, String message, String version) throws Exception {
+            final String HOST = "smtp.qq.com";
+            final String PORT = "465";
+            final String ACCOUNT = "36612255@qq.com";
+            // TODO(安全): 下方为 QQ 邮箱授权码。本 GitHub 仓库为公开仓库，APK 可被任何人下载并反编译提取此码，
+            // 建议将仓库设为私有，或改用后端转发。当前填入的是用户提供的占位值，请替换为真实 16 位授权码后再构建。
+            final String AUTH_CODE = "授权码_0dba";
+            Properties props = new Properties();
+            props.put("mail.smtp.host", HOST);
+            props.put("mail.smtp.port", PORT);
+            props.put("mail.smtp.auth", "true");
+            props.put("mail.smtp.ssl.enable", "true");
+            props.put("mail.smtp.socketFactory.class", "javax.net.ssl.SSLSocketFactory");
+            props.put("mail.smtp.socketFactory.port", PORT);
+            Session session = Session.getInstance(props, new javax.mail.Authenticator() {
+                @Override
+                protected javax.mail.PasswordAuthentication getPasswordAuthentication() {
+                    return new javax.mail.PasswordAuthentication(ACCOUNT, AUTH_CODE);
+                }
+            });
+            MimeMessage msg = new MimeMessage(session);
+            msg.setFrom(new InternetAddress(ACCOUNT));
+            msg.setRecipients(Message.RecipientType.TO, InternetAddress.parse(ACCOUNT));
+            msg.setSubject("九品莲台 用户反馈 v" + version, "UTF-8");
+            String body = "称呼：" + name + "\n联系方式：" + contact + "\n版本：" + version + "\n\n反馈内容：\n" + message;
+            msg.setText(body, "UTF-8");
+            msg.setSentDate(new Date());
+            Transport.send(msg);
         }
     }
 }

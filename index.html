@@ -896,6 +896,22 @@
             white-space: nowrap;
         }
 
+        /* 翻书动画：方向感知的滑入淡出（next=从右滑入，prev=从左滑入） */
+        #fullscreenReader { perspective: 1600px; }
+        .fullscreen-content.flip-next { animation: flipInNext 0.38s cubic-bezier(0.22, 0.61, 0.36, 1); }
+        .fullscreen-content.flip-prev { animation: flipInPrev 0.38s cubic-bezier(0.22, 0.61, 0.36, 1); }
+        @keyframes flipInNext {
+            from { opacity: 0; transform: translateX(28px) scale(0.99); }
+            to   { opacity: 1; transform: translateX(0) scale(1); }
+        }
+        @keyframes flipInPrev {
+            from { opacity: 0; transform: translateX(-28px) scale(0.99); }
+            to   { opacity: 1; transform: translateX(0) scale(1); }
+        }
+        @media (prefers-reduced-motion: reduce) {
+            .fullscreen-content.flip-next, .fullscreen-content.flip-prev { animation: none; }
+        }
+
         #fullscreenPageInfo {
             flex-shrink: 0;
             white-space: nowrap;
@@ -1659,10 +1675,6 @@
         #bgUpload {
             display: none;
         }
-        #sutraFileInput {
-            display: none;
-        }
-
         /* 图片最上层显示模式 */
         .app-container.image-overlay-mode {
             background-size: contain !important;
@@ -2690,7 +2702,7 @@
 
             <div class="upload-area">
                 <button id="uploadSutraBtn"><i class="fas fa-upload"></i> 上传经文 (TXT/PDF/DOCX)</button>
-                <input type="file" id="sutraFileInput" accept=".txt,.pdf,.docx">
+                <button id="importWebBtn" style="margin-left:8px; background:#e7dccb;"><i class="fas fa-globe"></i> 🌐 导入网上经书</button>
             </div>
         </div>
 
@@ -2711,7 +2723,7 @@
             <div class="fullscreen-footer">
                 <span id="fullscreenPageInfo">第 1/1 页</span>
                 <input type="range" id="pageSlider" class="reader-page-slider" min="1" max="1" value="1" title="拖动跳转页码">
-                <span class="reader-hint">点击书页两侧翻页</span>
+                <span class="reader-hint">点击两侧翻页 · 点中间显隐工具栏</span>
             </div>
             <div class="font-size-panel" id="fontSizePanel">
                 <button class="font-size-btn" data-size="small"><i class="fas fa-minus"></i></button>
@@ -2944,6 +2956,22 @@
                 <div class="settings-row">
                     <span>📋 功能与使用指南</span>
                     <button id="settingGuideBtn" style="background:#b39575;color:#fff;border:none;border-radius:14px;padding:2px 14px;font-size:0.75rem;cursor:pointer;">查看</button>
+                </div>
+            </div>
+
+            <div class="settings-section">
+                <h4>💬 意见反馈</h4>
+                <div class="settings-row">
+                    <span>📝 提交反馈 / 建议</span>
+                    <button id="settingFeedbackBtn" style="background:#b39575;color:#fff;border:none;border-radius:14px;padding:2px 14px;font-size:0.75rem;cursor:pointer;">填写</button>
+                </div>
+            </div>
+
+            <div class="settings-section">
+                <h4>📜 每日开示</h4>
+                <div class="settings-row">
+                    <span>📖 阅读今日开示 / 往期内容</span>
+                    <button id="settingDailyBtn" style="background:#b39575;color:#fff;border:none;border-radius:14px;padding:2px 14px;font-size:0.75rem;cursor:pointer;">查看</button>
                 </div>
             </div>
 
@@ -3445,6 +3473,7 @@
             let totalPages = 1;
             let charsPerPage = 500;
             let sutraPages = [];   // 基于真实渲染测量的分页结果
+            let lastPageDir = 'next'; // 翻页方向（next/prev），供翻书动画使用
             let readTimeTotal = parseInt(localStorage.getItem('read_time_total') || '0');
             let readTimeToday = parseInt(localStorage.getItem('read_time_today') || '0');
             let readTimeMonth = parseInt(localStorage.getItem('read_time_month') || '0');
@@ -3479,6 +3508,18 @@
                 if (progress) progress.classList.add('reader-bar-hidden');
                 hideSpeechSpeedPanel();
                 hideFontPanel();
+            }
+
+            // 点击书页中间区域：切换上下功能栏（显 ↔ 隐）
+            function toggleReaderUI() {
+                const reader = document.getElementById('fullscreenReader');
+                if (!reader) return;
+                if (reader.classList.contains('reader-ui-hidden')) {
+                    showReaderUI();
+                } else {
+                    hideReaderUI();
+                    if (readerUiHideTimer) clearTimeout(readerUiHideTimer);
+                }
             }
 
             function startReaderUiHideTimer() {
@@ -3546,7 +3587,11 @@
             }
 
             // 版本管理
-            const APP_VERSION = '1.0.0'; // 每次发版请同步修改 android-app/app/build.gradle 的 versionCode(递增整数) 与 versionName
+            const APP_VERSION = '1.0.1.1'; // 四段式版本号：A.B.C.D。每段 0-9，满 9 进一（如 D:9→0 且 C+1）。每次修改代码后 D+1；D 到 9 后 C+1、D 归零。请同步修改 android-app/app/build.gradle 的 versionCode(单调递增整数) 与 versionName
+            // 意见反馈后端：复用检查更新所用的公开仓库 jackyleo520/lotus-counter，提交时前端直接 POST 创建 issue，
+            // 反馈自动归档进仓库 issue 列表（可分类/回复）。注意：token 暴露在客户端 JS，公开 issue 任何人可见，请勿填敏感隐私。
+            const GITHUB_ISSUES_URL = 'https://api.github.com/repos/jackyleo520/lotus-counter/issues';
+            const GITHUB_FEEDBACK_TOKEN = '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';
             // 检查更新地址：指向 GitHub Releases 的 "latest" API。
             // 托管方式：在 GitHub 新建仓库，每次发版打一个 Release（tag 形如 v1.0.1）并把 九品莲台.apk 作为资源上传，
             // 然后把下面 your-repo/lotus-counter 换成你的 "用户名/仓库名" 即可。应用启动会自动检测、手动点"检查"亦可。
@@ -4612,108 +4657,167 @@
             // 基于真实 DOM 渲染测量的自动铺满分页：
             // 使用内容盒子的真实宽高作为测量基准，忽略 padding 干扰，
             // 每页尽量填满可视区域，允许段落跨页，下一页内容紧接上一页。
-            function paginateSutra(content, reader) {
-                reader = reader || document.getElementById('fullscreenContent');
-                if (!reader) return [content];
-                content = content.replace(/\r\n?/g, '\n');
-
+            // 字数测量（仅 2 次回流测出行高与每行字数，避免逐段二分的上万次强制重排导致大书卡死白屏）
+            function measureReaderMetrics(reader) {
+                if (!reader) return null;
                 const cs = getComputedStyle(reader);
                 const padTop = parseFloat(cs.paddingTop) || 0;
                 const padBottom = parseFloat(cs.paddingBottom) || 0;
                 const padLeft = parseFloat(cs.paddingLeft) || 0;
                 const padRight = parseFloat(cs.paddingRight) || 0;
-                // 内容盒子实际可用宽高（排除 padding）
                 const availableHeight = reader.clientHeight - padTop - padBottom;
                 const availableWidth = reader.clientWidth - padLeft - padRight;
-                if (availableHeight <= 0 || availableWidth <= 0) return [content];
+                if (availableHeight <= 0 || availableWidth <= 0) return null;
+                const m = document.createElement('div');
+                m.style.cssText = 'position:absolute;visibility:hidden;left:-9999px;top:0;box-sizing:content-box;white-space:pre-wrap;word-break:break-all;overflow-wrap:break-word;';
+                m.style.width = availableWidth + 'px';
+                m.style.fontSize = cs.fontSize;
+                m.style.fontFamily = cs.fontFamily;
+                m.style.fontWeight = cs.fontWeight;
+                m.style.lineHeight = cs.lineHeight;
+                m.style.letterSpacing = cs.letterSpacing;
+                m.style.wordSpacing = cs.wordSpacing;
+                m.style.textAlign = cs.textAlign;
+                document.body.appendChild(m);
+                const sample = '测'.repeat(120);
+                m.textContent = sample + '\n' + sample + '\n' + sample + '\n' + sample + '\n' + sample;
+                const lineHeight = (m.offsetHeight / 5) || parseFloat(cs.lineHeight) || 20;
+                m.textContent = '测'.repeat(400);
+                const linesFit = Math.max(1, Math.round(m.offsetHeight / lineHeight));
+                const charsPerLine = Math.max(1, Math.floor(400 / linesFit));
+                document.body.removeChild(m);
+                const linesPerPage = Math.max(1, Math.floor(availableHeight / lineHeight));
+                const charsPerPage = Math.max(charsPerLine, linesPerPage * charsPerLine);
+                return { charsPerPage: charsPerPage, lineHeight: lineHeight, availableHeight: availableHeight, availableWidth: availableWidth };
+            }
 
-                // 隐藏测量元素：与阅读容器内容盒子同宽，不带 padding
-                const measurer = document.createElement('div');
-                measurer.style.cssText = 'position:absolute;visibility:hidden;left:-9999px;top:0;box-sizing:content-box;white-space:pre-wrap;word-break:break-all;overflow-wrap:break-word;';
-                measurer.style.width = availableWidth + 'px';
-                measurer.style.fontSize = cs.fontSize;
-                measurer.style.fontFamily = cs.fontFamily;
-                measurer.style.fontWeight = cs.fontWeight;
-                measurer.style.lineHeight = cs.lineHeight;
-                measurer.style.letterSpacing = cs.letterSpacing;
-                measurer.style.wordSpacing = cs.wordSpacing;
-                measurer.style.textAlign = cs.textAlign;
-                document.body.appendChild(measurer);
-
-                const measure = (str) => {
-                    measurer.textContent = str;
-                    return measurer.offsetHeight;
-                };
-
-                // 在 base 后追加 add 的前 n 个字符，找最大 n 使新增高度不超过 maxH
-                const findFit = (base, add, maxH) => {
-                    if (maxH <= 0) return 0;
-                    const baseH = measure(base);
-                    let lo = 0, hi = add.length, ans = 0;
-                    while (lo <= hi) {
-                        const mid = (lo + hi) >> 1;
-                        const addH = measure(base + add.substring(0, mid)) - baseH;
-                        if (addH <= maxH) {
-                            ans = mid;
-                            lo = mid + 1;
-                        } else {
-                            hi = mid - 1;
-                        }
-                    }
-                    return ans;
-                };
-
+            // 可续排的分页器（懒加载核心）：按字符预算切分，允许段落跨页，下一页紧接上一页；
+            // 支持按需补齐（fillUpTo / fillChunk），首屏只排前几页，其余在后台或翻页时续排。
+            function createSutraPaginator(content, charsPerPage) {
+                content = content.replace(/\r\n?/g, '\n');
+                const paragraphs = content.split('\n').filter(p => p.length > 0);
+                let pIdx = 0;
+                let rest = '';
                 const pages = [];
-                let currentText = '';
-                let currentHeight = 0;
-
-                const flush = () => {
-                    if (currentText !== '') pages.push(currentText);
-                    currentText = '';
-                    currentHeight = 0;
-                };
-
-                // 把一段文字加入当前页，放不下则拆分，允许段落跨页
-                const addToPage = (text, isParagraphStart) => {
-                    let remaining = text;
-                    while (remaining.length > 0) {
-                        const space = availableHeight - currentHeight;
-                        if (space <= 0) flush();
-
-                        // 段落开头且当前页已有内容，先在前面加换行
-                        const separator = (currentText !== '' && isParagraphStart) ? '\n' : '';
-                        const fit = findFit(currentText + separator, remaining, space);
-
-                        if (fit === 0) {
-                            // 当前页剩余空间连一个字符都塞不下（理论不会），直接开新页
-                            if (currentText === '') {
-                                // 保护：单个字符放不下也硬塞
-                                currentText = remaining.substring(0, 1);
-                                currentHeight = measure(currentText);
-                                remaining = remaining.substring(1);
-                            } else {
-                                flush();
-                            }
-                            continue;
+                function fillOne() {
+                    if (pIdx >= paragraphs.length && rest === '') return false;
+                    let cur = '';
+                    let curLen = 0;
+                    while (true) {
+                        if (rest === '') {
+                            if (pIdx >= paragraphs.length) break;
+                            rest = paragraphs[pIdx++];
                         }
-
-                        currentText += separator + remaining.substring(0, fit);
-                        currentHeight = measure(currentText);
-                        remaining = remaining.substring(fit);
-                        // 一旦拆分，剩余文本跨页连续显示，不再加段落换行
-                        isParagraphStart = false;
+                        if (curLen > 0 && curLen + 1 <= charsPerPage) { cur += '\n'; curLen += 1; }
+                        if (curLen >= charsPerPage) break;
+                        const space = charsPerPage - curLen;
+                        if (rest.length <= space) {
+                            cur += rest; curLen += rest.length; rest = '';
+                            continue;
+                        } else {
+                            cur += rest.substring(0, space);
+                            rest = rest.substring(space);
+                            curLen = charsPerPage;
+                            break;
+                        }
                     }
-                };
-
-                const paragraphs = content.split('\n');
-                for (const para of paragraphs) {
-                    if (para === '') continue; // 忽略空行，避免单独产生空白页
-                    addToPage(para, true);
+                    pages.push(cur);
+                    return true;
                 }
+                return {
+                    pages: pages,
+                    get done() { return pIdx >= paragraphs.length && rest === ''; },
+                    fillUpTo: function (n) { while (pages.length < n && fillOne()) {} return pages; },
+                    fillChunk: function (c) { let i = 0; while (i < c && fillOne()) i++; return pages; },
+                    fillAll: function () { while (fillOne()) {} return pages; }
+                };
+            }
 
-                flush();
-                document.body.removeChild(measurer);
-                return pages.length ? pages : [content];
+            // 阅读器「正在排版」加载层：避免大书分页时白屏卡死无反馈
+            function showReaderLoading() {
+                let el = document.getElementById('readerLoading');
+                if (!el) {
+                    el = document.createElement('div');
+                    el.id = 'readerLoading';
+                    el.style.cssText = 'position:absolute;inset:0;display:none;align-items:center;justify-content:center;background:rgba(255,250,242,0.94);color:#6a4f32;font-size:1rem;z-index:60;';
+                    el.innerHTML = '<div style="text-align:center;"><div style="font-size:1.8rem;margin-bottom:10px;">📿</div>正在排版，请稍候…</div>';
+                    const reader = document.getElementById('fullscreenReader');
+                    if (reader) reader.appendChild(el);
+                }
+                el.style.display = 'flex';
+            }
+            function hideReaderLoading() {
+                const el = document.getElementById('readerLoading');
+                if (el) el.style.display = 'none';
+            }
+
+            // ===== 懒加载（渐进分页）状态与辅助函数 =====
+            let sutraPaginator = null;   // 当前经文的续排分页器（后台补齐/翻页按需），排完置 null
+            let sutraPagesEst = 0;       // 总页数估算（基于内容长度/每页字数），后台排完前用于显示与滑块边界
+            const LAZY_PRELOAD = 6;      // 打开时先排前 N 页，立即出首页
+            const LAZY_CHUNK = 12;       // 后台每批补排页数
+
+            // 确保某一页已分页：未排则同步补齐到该页（纯字符串切分，速度极快），保证翻页/跳转永不空白
+            function ensurePage(page) {
+                page = Math.max(0, page | 0);
+                if (sutraPages[page]) return true;
+                if (sutraPaginator) {
+                    sutraPaginator.fillUpTo(page + 1);
+                    if (sutraPaginator.done) finalizePagination(currentSutraIndex, sutraPaginator);
+                }
+                return !!sutraPages[page];
+            }
+            // 是否已是真实末页（仍在续排时视为非末页，TTS/翻页据此继续）
+            function isLastPage(p) {
+                if (sutraPaginator && !sutraPaginator.done) return false;
+                return p >= sutraPages.length - 1;
+            }
+            function goToPage(target) {
+                if (currentSutraIndex < 0) return;
+                target = Math.max(0, target | 0);
+                lastPageDir = target > currentPage ? 'next' : 'prev';
+                ensurePage(target);
+                if (!sutraPages[target]) { // 目标页不存在（已到真实末尾）→ 夹到最后一页
+                    let last = sutraPages.length - 1;
+                    while (last >= 0 && !sutraPages[last]) last--;
+                    target = Math.max(0, last);
+                }
+                if (target === currentPage) { updateReaderProgressUI(currentPage); return; }
+                currentPage = target;
+                showPage(currentPage);
+                saveSutraProgress();
+            }
+            function goNext() { if (!isLastPage(currentPage)) goToPage(currentPage + 1); }
+            function goPrev() { if (currentPage > 0) goToPage(currentPage - 1); }
+
+            function scheduleLazy(run) {
+                if (window.requestIdleCallback) window.requestIdleCallback(run, { timeout: 200 });
+                else setTimeout(run, 30);
+            }
+            // 后台/空闲时分批补齐剩余页，排完回填缓存并校正总页数
+            function scheduleLazyPagination(index, paginator) {
+                const run = function () {
+                    if (!paginator || paginator.done) { finalizePagination(index, paginator); return; }
+                    paginator.fillChunk(LAZY_CHUNK);
+                    if (currentSutraIndex === index && sutraPaginator === paginator) {
+                        totalPages = Math.max(paginator.pages.length, sutraPagesEst);
+                        updateReaderProgressUI(currentPage);
+                    }
+                    if (paginator.done) { finalizePagination(index, paginator); return; }
+                    scheduleLazy(run);
+                };
+                scheduleLazy(run);
+            }
+            function finalizePagination(index, paginator) {
+                if (!paginator) return;
+                paginator.fillAll();
+                sutraPages = paginator.pages;
+                totalPages = sutraPages.length;
+                sutraPagesCache[index] = { pages: sutraPages }; // 缓存分页结果，再次打开秒开
+                const s = sutraList[index];
+                if (s) s.totalPages = totalPages;
+                if (currentSutraIndex === index) updateReaderProgressUI(currentPage);
+                if (sutraPaginator === paginator) sutraPaginator = null;
             }
 
             // ===================== 经文预读缓存（已禁用） =====================
@@ -4733,13 +4837,14 @@
             function paginateNow(content) {
                 const reader = document.getElementById('fullscreenReader');
                 const c = document.getElementById('fullscreenContent');
-                if (!reader || !c) return paginateSutra(content);
+                if (!reader || !c) return [content];
                 const hadHidden = reader.classList.contains('reader-ui-hidden');
                 const oldTransition = c.style.transition;
                 c.style.transition = 'none';
                 if (!hadHidden) reader.classList.add('reader-ui-hidden');
                 void reader.offsetHeight; // 强制回流拿到最终尺寸
-                const pages = paginateSutra(content);
+                const metrics = measureReaderMetrics(c);
+                const pages = metrics ? createSutraPaginator(content, metrics.charsPerPage).fillAll() : [content];
                 c.style.transition = oldTransition;
                 if (!hadHidden) reader.classList.remove('reader-ui-hidden');
                 return pages;
@@ -4747,6 +4852,7 @@
 
             function openSutra(index) {
                 currentSutraIndex = index;
+                sutraPaginator = null; // 清掉上一次的续排器，避免跨经文串台
                 const s = sutraList[index];
                 const reader = document.getElementById('fullscreenReader');
                 const content = document.getElementById('fullscreenContent');
@@ -4764,6 +4870,7 @@
                 // 命中预读缓存：直接显示，零等待，用户点开即见
                 if (sutraPagesCache[index] && sutraPagesCache[index].pages) {
                     sutraPages = sutraPagesCache[index].pages;
+                    sutraPaginator = null; // 命中缓存，无需续排
                     totalPages = sutraPages.length;
                     currentPage = Math.min(s.page || 0, totalPages - 1);
                     s.page = currentPage;
@@ -4779,15 +4886,29 @@
                 content.style.transition = 'none';
                 reader.classList.add('reader-ui-hidden');
                 void reader.offsetHeight; // 强制回流
+                showReaderLoading(); // 大书分页期间显示「正在排版」，避免白屏卡死无反馈
 
                 setTimeout(() => {
-                    sutraPages = paginateNow(s.content);
-                    totalPages = sutraPages.length;
-                    s.totalPages = totalPages;
-                    currentPage = Math.min(s.page || 0, totalPages - 1);
+                    const metrics = measureReaderMetrics(content);
+                    if (!metrics) {
+                        // 测量失败兜底：直接全量同步分页（旧逻辑）
+                        sutraPages = paginateNow(s.content);
+                        totalPages = sutraPages.length;
+                        sutraPaginator = null;
+                    } else {
+                        // 懒加载：先排前几页立即出首页，其余在后台/翻页时续排
+                        sutraPaginator = createSutraPaginator(s.content, metrics.charsPerPage);
+                        sutraPagesEst = Math.max(1, Math.ceil(s.content.length / metrics.charsPerPage));
+                        sutraPaginator.fillUpTo(LAZY_PRELOAD);
+                        sutraPages = sutraPaginator.pages;
+                        totalPages = Math.max(sutraPagesEst, sutraPaginator.pages.length);
+                        scheduleLazyPagination(index, sutraPaginator); // 后台补齐剩余页
+                    }
+                    currentPage = Math.min(s.page || 0, Math.max(0, totalPages - 1));
                     s.page = currentPage;
                     s.progress = Math.round((currentPage / totalPages) * 100);
                     showPage(currentPage);
+                    hideReaderLoading();
                     content.style.transition = oldTransition; // 恢复过渡，供后续自动隐藏使用
                     showReaderUI(); // 先显示工具栏，其内部会再启动 1.5s 自动隐藏
                 }, 50);
@@ -4798,10 +4919,17 @@
             }
 
             function showPage(page) {
+                ensurePage(page);
                 const s = sutraList[currentSutraIndex];
                 const text = sutraPages[page] || '';
                 const fullscreenContent = document.getElementById('fullscreenContent');
-                if (fullscreenContent) fullscreenContent.innerHTML = text;
+                if (fullscreenContent) {
+                    fullscreenContent.innerHTML = text;
+                    // 翻书动画：重启方向感知的滑入动画
+                    fullscreenContent.classList.remove('flip-next', 'flip-prev');
+                    void fullscreenContent.offsetWidth; // 强制回流以便重新触发动画
+                    fullscreenContent.classList.add(lastPageDir === 'next' ? 'flip-next' : 'flip-prev');
+                }
                 updateReaderProgressUI(page);
                 s.progress = Math.round((page / totalPages) * 100);
                 s.page = page;
@@ -4921,7 +5049,31 @@
                 saveSutraProgress();
             }
 
+            // 系统返回键逐级返回（Android onBackPressed 调用）：
+            // 阅读器打开→关闭；反馈弹窗打开→关闭；否则非计数器首页→切回首页；在首页→返回 false 让原生退出
+            window.__appBack = function() {
+                const reader = document.getElementById('fullscreenReader');
+                if (reader && reader.style.display === 'flex') {
+                    if (typeof closeFullscreenReader === 'function') closeFullscreenReader();
+                    else reader.style.display = 'none';
+                    return true;
+                }
+                const fb = document.getElementById('feedbackModal');
+                if (fb && fb.style.display === 'flex') {
+                    if (typeof closeFeedback === 'function') closeFeedback();
+                    else fb.style.display = 'none';
+                    return true;
+                }
+                const activePage = document.querySelector('.page.active');
+                if (activePage && activePage.id !== 'page-counter') {
+                    const counterTab = document.querySelector('.bottom-tabbar .tab-item[data-page="counter"]');
+                    if (counterTab) { counterTab.click(); return true; }
+                }
+                return false;
+            };
+
             function updateFullscreenContent() {
+                ensurePage(currentPage);
                 const s = sutraList[currentSutraIndex];
                 const text = sutraPages[currentPage] || '';
                 const fullscreenContent = document.getElementById('fullscreenContent');
@@ -4942,6 +5094,7 @@
                 // 字号变化后重新分页（隐藏态测量，保证铺满），保持阅读进度尽量连续
                 if (currentSutraIndex >= 0 && sutraList[currentSutraIndex]) {
                     const s = sutraList[currentSutraIndex];
+                    sutraPaginator = null;
                     sutraPages = paginateNow(s.content);
                     totalPages = sutraPages.length;
                     currentPage = Math.min(currentPage, totalPages - 1);
@@ -5118,9 +5271,8 @@
                 speechUtterance.onend = function() {
                     isSpeaking = false;
                     isPaused = false;
-                    if (currentPage < totalPages - 1) {
-                        currentPage++;
-                        showPage(currentPage);
+                    if (!isLastPage(currentPage)) {
+                        goNext();
                         startSpeech();
                     } else {
                         updateSpeechUI();
@@ -5152,9 +5304,8 @@
             // 原生 TTS 朗读完成/出错时的回调
             window.__onTtsDone = function(utteranceId) {
                 if (!isSpeaking || isPaused) return;
-                if (currentPage < totalPages - 1) {
-                    currentPage++;
-                    showPage(currentPage);
+                if (!isLastPage(currentPage)) {
+                    goNext();
                     startSpeech();
                 } else {
                     isSpeaking = false;
@@ -5452,17 +5603,13 @@
                 URL.revokeObjectURL(a.href);
             }
 
-            document.getElementById('sutraFileInput').addEventListener('change', async function(e) {
-                const file = e.target.files[0];
-                if (!file) return;
-                
+            // 解析并导入本地经文文件（TXT/PDF/DOCX），供本地上传与网页导入复用
+            async function importLocalSutraFile(file) {
                 const fileName = file.name;
                 const fileExt = fileName.substring(fileName.lastIndexOf('.')).toLowerCase();
                 const baseName = fileName.replace(/\.[^.]+$/, '');
-                
                 try {
                     let content = '';
-                    
                     if (fileExt === '.txt') {
                         content = await readFileAsText(file);
                     } else if (fileExt === '.pdf') {
@@ -5471,20 +5618,15 @@
                         content = await readDocxFile(file);
                     } else if (fileExt === '.doc') {
                         alert('抱歉，.doc 格式不支持，请使用 .docx 或 .txt 格式');
-                        this.value = '';
                         return;
                     } else {
                         alert('不支持的文件格式，请上传 .txt、.pdf 或 .docx 文件');
-                        this.value = '';
                         return;
                     }
-                    
                     if (!content || content.trim() === '') {
                         alert('无法提取文件内容，请检查文件是否为空或损坏');
-                        this.value = '';
                         return;
                     }
-                    
                     sutraList.push({ name: baseName, content, progress: 0, page: 0, isUser: true });
                     renderSutraList();
                     saveUserSutras();
@@ -5493,8 +5635,22 @@
                     console.error('文件解析错误:', err);
                     alert('文件解析失败: ' + err.message);
                 }
-                
-                this.value = '';
+            }
+
+            // 上传本地经文（TXT/PDF/DOCX）：动态创建并挂到 body 再触发 click，
+            // 否则 Android WebView 的 onShowFileChooser 收不到，点击无反应。
+            document.getElementById('uploadSutraBtn').addEventListener('click', function() {
+                const input = document.createElement('input');
+                input.type = 'file';
+                input.accept = '.txt,.pdf,.docx';
+                input.style.display = 'none';
+                document.body.appendChild(input);
+                input.addEventListener('change', async function(e) {
+                    const file = e.target.files && e.target.files[0];
+                    if (file) await importLocalSutraFile(file);
+                    if (input.parentNode) input.parentNode.removeChild(input);
+                });
+                input.click();
             });
 
             function readFileAsText(file) {
@@ -5772,6 +5928,91 @@
                     alert('请在计数器页面逐个导入数据。\n后续将支持批量导入。');
                 });
             }
+
+            // ===== 意见反馈（DOMContentLoaded 后初始化：模态框在 <script> 之后，需等解析完成再 getElementById）=====
+            document.addEventListener('DOMContentLoaded', function () {
+                const feedbackModal = document.getElementById('feedbackModal');
+                const feedbackNameEl = document.getElementById('feedbackName');
+                const feedbackContactEl = document.getElementById('feedbackContact');
+                const feedbackMsgEl = document.getElementById('feedbackMessage');
+                const feedbackStatusEl = document.getElementById('feedbackStatus');
+                const feedbackSubmitBtn = document.getElementById('feedbackSubmitBtn');
+                const feedbackMailtoBtn = document.getElementById('feedbackMailtoBtn');
+
+                function openFeedback() {
+                    if (!feedbackModal) return;
+                    feedbackStatusEl.textContent = '';
+                    feedbackStatusEl.style.color = '#6a4f32';
+                    feedbackModal.style.display = 'flex';
+                }
+                function closeFeedback() { if (feedbackModal) feedbackModal.style.display = 'none'; }
+
+                const feedbackCloseX = document.getElementById('feedbackCloseX');
+                if (feedbackCloseX) feedbackCloseX.addEventListener('click', closeFeedback);
+                if (feedbackModal) feedbackModal.addEventListener('click', function(e){ if (e.target === feedbackModal) closeFeedback(); });
+
+                const settingFeedbackBtn = document.getElementById('settingFeedbackBtn');
+                if (settingFeedbackBtn) settingFeedbackBtn.addEventListener('click', openFeedback);
+
+                function buildFeedbackMailto() {
+                    const name = feedbackNameEl.value.trim();
+                    const contact = feedbackContactEl.value.trim();
+                    const msg = feedbackMsgEl.value.trim();
+                    const v = (typeof APP_VERSION !== 'undefined') ? APP_VERSION : '';
+                    const body = '称呼：' + name + '\n联系方式：' + contact + '\n版本：' + v + '\n\n反馈内容：\n' + msg;
+                    return 'mailto:36612255@qq.com?subject=' + encodeURIComponent('九品莲台 用户反馈') + '&body=' + encodeURIComponent(body);
+                }
+
+                if (feedbackMailtoBtn) feedbackMailtoBtn.addEventListener('click', function(e){
+                    e.preventDefault();
+                    if (!feedbackMsgEl.value.trim()) { feedbackStatusEl.textContent = '请先填写反馈内容'; feedbackStatusEl.style.color = '#c0392b'; return; }
+                    window.location.href = buildFeedbackMailto();
+                });
+
+                // 提交反馈：主通道 GitHub Issues（前端直接 POST 建 issue，反馈自动归档进仓库）；
+                // 失败（网络/限流）则回退到邮件发送。
+                if (feedbackSubmitBtn) feedbackSubmitBtn.addEventListener('click', function(){
+                    const msg = feedbackMsgEl.value.trim();
+                    if (!msg) { feedbackStatusEl.textContent = '请填写反馈内容'; feedbackStatusEl.style.color = '#c0392b'; return; }
+                    const name = feedbackNameEl.value.trim();
+                    const contact = feedbackContactEl.value.trim();
+                    const v = (typeof APP_VERSION !== 'undefined') ? APP_VERSION : '';
+                    feedbackSubmitBtn.disabled = true;
+                    feedbackStatusEl.textContent = '提交中…';
+                    feedbackStatusEl.style.color = '#6a4f32';
+
+                    const title = '[用户反馈] ' + (msg.length > 30 ? msg.substring(0, 30) + '…' : msg) + '（v' + v + '）';
+                    const body =
+                        '**称呼**：' + (name || '（未填）') + '\n' +
+                        '**联系方式**：' + (contact || '（未填）') + '\n' +
+                        '**版本**：' + v + '\n' +
+                        '**时间**：' + new Date().toLocaleString('zh-CN') + '\n\n' +
+                        '**反馈内容**：\n' + msg;
+                    fetch(GITHUB_ISSUES_URL, {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': 'token ' + GITHUB_FEEDBACK_TOKEN,
+                            'Content-Type': 'application/json',
+                            'Accept': 'application/vnd.github+json'
+                        },
+                        body: JSON.stringify({ title: title, body: body })
+                    }).then(function(res){
+                        if (res.ok) {
+                            feedbackStatusEl.textContent = '提交成功，南无阿弥陀佛，感谢您的反馈！';
+                            feedbackStatusEl.style.color = '#2e7d32';
+                            feedbackMsgEl.value = ''; feedbackNameEl.value = ''; feedbackContactEl.value = '';
+                            setTimeout(closeFeedback, 1500);
+                        } else {
+                            throw new Error('HTTP ' + res.status);
+                        }
+                    }).catch(function(){
+                        feedbackStatusEl.textContent = '网络提交失败，已为您打开邮件发送。';
+                        feedbackStatusEl.style.color = '#c0392b';
+                        window.location.href = buildFeedbackMailto();
+                        feedbackSubmitBtn.disabled = false;
+                    });
+                });
+            });
 
             muyuArea.addEventListener('click', handleMuyuClick);
 
@@ -6281,21 +6522,149 @@
                     el.textContent = formatDuration(Math.floor(totalDhyanaSeconds / 60));
                 }
             }
-            document.getElementById('uploadSutraBtn').addEventListener('click', function() {
-                document.getElementById('sutraFileInput').click();
-            });
             document.getElementById('fullscreenBackBtn').addEventListener('click', closeFullscreenReader);
+
+            // ===================== 导入网上 / 网盘经书 =====================
+            // 模态框 #importWebModal 在 <script> 之后，须等 DOMContentLoaded 解析完成再 getElementById 绑定监听
+            document.addEventListener('DOMContentLoaded', function () {
+            (function setupImportWeb() {
+                const modal = document.getElementById('importWebModal');
+                if (!modal) return;
+                const urlWrap = document.getElementById('iwUrlWrap');
+                const diskWrap = document.getElementById('iwDiskWrap');
+                const pasteWrap = document.getElementById('iwPasteWrap');
+                const urlInput = document.getElementById('iwUrl');
+                const diskInput = document.getElementById('iwDiskUrl');
+                const pasteInput = document.getElementById('iwPaste');
+                const titleInput = document.getElementById('iwTitle');
+                const contentInput = document.getElementById('iwContent');
+                const statusEl = document.getElementById('iwStatus');
+                const fetchBtn = document.getElementById('iwFetchBtn');
+                let activeTab = 'url';
+
+                function showImportWeb() {
+                    modal.style.display = 'flex';
+                    statusEl.textContent = '';
+                    switchTab('url');
+                    titleInput.value = '';
+                    contentInput.value = '';
+                    urlInput.value = ''; diskInput.value = ''; pasteInput.value = '';
+                }
+                function closeImportWeb() { modal.style.display = 'none'; }
+                function switchTab(tab) {
+                    activeTab = tab;
+                    urlWrap.style.display = tab === 'url' ? '' : 'none';
+                    diskWrap.style.display = tab === 'disk' ? '' : 'none';
+                    pasteWrap.style.display = tab === 'paste' ? '' : 'none';
+                    modal.querySelectorAll('.iw-tab').forEach(b => {
+                        const on = b.dataset.tab === tab;
+                        b.style.background = on ? '#b39575' : '#ede3d6';
+                        b.style.color = on ? '#fff' : '#6a4f32';
+                        b.style.border = on ? 'none' : '1px solid #dacbb8';
+                    });
+                }
+                // 原生下载回调（绕过 WebView CORS）
+                window.__lastFetch = '';
+                window.__onFetchUrlDone = function(ok, err, len) {
+                    if (ok) {
+                        const html = window.__lastFetch || '';
+                        const text = extractReadableText(html);
+                        if (!text || text.trim().length < 5) {
+                            statusEl.textContent = '已获取内容，但可提取正文过少，请改用「粘贴文本」或检查链接。';
+                            return;
+                        }
+                        contentInput.value = text;
+                        if (!titleInput.value) titleInput.value = guessTitle(html) || '网络经书';
+                        statusEl.textContent = '✓ 已获取正文（约 ' + text.length + ' 字），可编辑后保存。';
+                    } else {
+                        statusEl.textContent = '✗ 获取失败：' + (err || '未知错误') + '。可改用「粘贴文本」。';
+                    }
+                };
+                function extractReadableText(html) {
+                    if (!html) return '';
+                    let s = html;
+                    s = s.replace(/<script[\s\S]*?<\/script>/gi, ' ');
+                    s = s.replace(/<style[\s\S]*?<\/style>/gi, ' ');
+                    s = s.replace(/<noscript[\s\S]*?<\/noscript>/gi, ' ');
+                    s = s.replace(/<!--[\s\S]*?-->/g, ' ');
+                    s = s.replace(/<[^>]+>/g, '\n');
+                    s = s.replace(/&nbsp;/gi, ' ').replace(/&ensp;/gi, ' ').replace(/&emsp;/gi, ' ');
+                    s = s.replace(/&amp;/gi, '&').replace(/&lt;/gi, '<').replace(/&gt;/gi, '>').replace(/&quot;/gi, '"').replace(/&#(\d+);/g, function(_, n) { return String.fromCharCode(parseInt(n, 10)); });
+                    s = s.replace(/[ \t]+/g, ' ');
+                    s = s.replace(/^\s+|\s+$/g, '');
+                    s = s.replace(/\n{3,}/g, '\n\n');
+                    return s;
+                }
+                function guessTitle(html) {
+                    let m = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
+                    if (m) return m[1].replace(/<[^>]+>/g, '').replace(/&nbsp;/gi, ' ').trim();
+                    m = html.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i);
+                    if (m) return m[1].replace(/<[^>]+>/g, '').trim();
+                    return '';
+                }
+                function fetchWebContent(url, cb) {
+                    if (window.AndroidBridge && typeof window.AndroidBridge.fetchUrl === 'function') {
+                        window.AndroidBridge.fetchUrl(url);
+                    } else {
+                        fetch(url).then(r => r.text()).then(t => cb(t, '')).catch(e => cb(null, e.message || '网络错误'));
+                    }
+                }
+                if (fetchBtn) {
+                    fetchBtn.addEventListener('click', function() {
+                        statusEl.textContent = '正在获取内容，请稍候…';
+                        if (activeTab === 'paste') {
+                            const t = (pasteInput.value || '').trim();
+                            contentInput.value = t;
+                            if (!titleInput.value) titleInput.value = '网络经书';
+                            statusEl.textContent = t.length >= 5 ? '✓ 已填入文本，可编辑后保存。' : '✗ 文本为空或过短。';
+                            return;
+                        }
+                        const url = (activeTab === 'disk' ? diskInput.value : urlInput.value).trim();
+                        if (!url) { statusEl.textContent = '✗ 请先填写链接。'; return; }
+                        if (!/^https?:\/\//i.test(url)) { statusEl.textContent = '✗ 链接需以 http(s):// 开头。'; return; }
+                        fetchWebContent(url, function(text, err) {
+                            if (text == null) { statusEl.textContent = '✗ 获取失败：' + (err || '未知错误') + '。可改用「粘贴文本」。'; return; }
+                            const t = extractReadableText(text);
+                            if (!t || t.trim().length < 5) { statusEl.textContent = '已获取但正文过少，请改用「粘贴文本」。'; return; }
+                            contentInput.value = t;
+                            if (!titleInput.value) titleInput.value = guessTitle(text) || '网络经书';
+                            statusEl.textContent = '✓ 已获取正文（约 ' + t.length + ' 字）。';
+                        });
+                    });
+                }
+                modal.querySelectorAll('.iw-tab').forEach(b => {
+                    b.addEventListener('click', function() { switchTab(b.dataset.tab); });
+                });
+                const iwCloseX = document.getElementById('importWebCloseX');
+                if (iwCloseX) iwCloseX.addEventListener('click', closeImportWeb);
+                modal.addEventListener('click', function(e) { if (e.target === modal) closeImportWeb(); });
+                const iwCancel = document.getElementById('iwCancelBtn');
+                if (iwCancel) iwCancel.addEventListener('click', closeImportWeb);
+                const iwSave = document.getElementById('iwSaveBtn');
+                if (iwSave) iwSave.addEventListener('click', function() {
+                    const content = (contentInput.value || '').trim();
+                    if (!content || content.length < 2) { alert('经文内容为空，无法保存。'); return; }
+                    const name = (titleInput.value || '').trim() || '网络经书';
+                    sutraList.push({ name: name, content: content, progress: 0, page: 0, isUser: true });
+                    renderSutraList();
+                    if (typeof saveUserSutras === 'function') saveUserSutras();
+                    closeImportWeb();
+                    alert('已导入经书：' + name);
+                });
+                const importWebBtn = document.getElementById('importWebBtn');
+                if (importWebBtn) importWebBtn.addEventListener('click', showImportWeb);
+            })();
+            });
+
 
             // 底部进度条拖动跳转页码
             const pageSlider = document.getElementById('pageSlider');
             if (pageSlider) {
                 pageSlider.addEventListener('input', function(e) {
-                    if (currentSutraIndex < 0 || totalPages <= 1) return;
+                    if (currentSutraIndex < 0) return;
                     const target = parseInt(e.target.value, 10) - 1;
-                    if (target >= 0 && target < totalPages && target !== currentPage) {
-                        currentPage = target;
-                        updateFullscreenContent();
-                        saveSutraProgress();
+                    if (!isNaN(target) && target !== currentPage) {
+                        goToPage(target);
                     }
                 });
             }
@@ -6308,24 +6677,17 @@
                     const rect = this.getBoundingClientRect();
                     const x = e.clientX - rect.left;
                     const y = e.clientY - rect.top;
-                    // 点击顶部/底部热区只显示工具栏，不触发翻页
+                    // 顶部/底部热区：仅显示工具栏
                     if (y < 80 || y > rect.height - 80) {
                         showReaderUI();
                         return;
                     }
-                    if (x < rect.width * 0.33) {
-                        if (currentPage > 0) {
-                            currentPage--;
-                            updateFullscreenContent();
-                            saveSutraProgress();
-                        }
-                    } else if (x > rect.width * 0.67) {
-                        if (currentPage < totalPages - 1) {
-                            currentPage++;
-                            updateFullscreenContent();
-                            saveSutraProgress();
-                        }
-                    }
+                    const xr = x / rect.width;
+                    // 左右两侧：翻页
+                    if (xr < 0.33) { goPrev(); return; }
+                    if (xr > 0.67) { goNext(); return; }
+                    // 中间区域：点击切换上下功能栏显隐
+                    toggleReaderUI();
                 });
             }
 
@@ -6717,23 +7079,26 @@
                 if (apkUrl) window.open(apkUrl, '_blank');
             }
 
-            // 启动时自动检查更新（每天只检查一次）
+            // 启动时自动检查更新（每次启动都检查；2 分钟内重复打开则跳过网络请求，避免频繁调用 GitHub API 触发限流）
             function autoCheckUpdate() {
-                const lastCheck = localStorage.getItem(LAST_UPDATE_CHECK_KEY);
-                const today = new Date().toISOString().split('T')[0];
-                
-                if (!lastCheck || lastCheck < today) {
-                    checkForUpdates(false); // 检测到大版本会弹窗引导下载安装
-                } else {
-                    const updateAvailable = localStorage.getItem(UPDATE_AVAILABLE_KEY);
-                    if (updateAvailable) {
-                        setTimeout(() => {
-                            if (confirm(`发现新版本 v${updateAvailable}！\n\n是否立即下载并安装？`)) {
-                                checkForUpdates(true);
-                            }
-                        }, 1000);
+                const lastCheckStr = localStorage.getItem(LAST_UPDATE_CHECK_KEY);
+                const now = Date.now();
+                if (lastCheckStr) {
+                    const lastCheck = new Date(lastCheckStr).getTime();
+                    // 2 分钟内刚查过：不重复请求，仅在有缓存的新版本时弹窗提醒
+                    if (!isNaN(lastCheck) && (now - lastCheck) < 2 * 60 * 1000) {
+                        const updateAvailable = localStorage.getItem(UPDATE_AVAILABLE_KEY);
+                        if (updateAvailable) {
+                            setTimeout(() => {
+                                if (confirm(`发现新版本 v${updateAvailable}！\n\n是否立即下载并安装？`)) {
+                                    checkForUpdates(true);
+                                }
+                            }, 1000);
+                        }
+                        return;
                     }
                 }
+                checkForUpdates(false); // 检测到大版本会弹窗引导下载安装
             }
 
             // 手动检查更新按钮
@@ -6741,6 +7106,146 @@
             if (checkUpdateBtn) {
                 checkUpdateBtn.addEventListener('click', function() {
                     checkForUpdates(true);
+                });
+            }
+
+            // ===== 每日开示 / 公告弹窗 =====
+            // 数据来源：仓库根目录 popup_messages.json（公开，经 api.github.com Contents API 读取，无需 token；与现有反馈/更新同一域名）
+            const POPUP_DATA_URL = 'https://api.github.com/repos/jackyleo520/lotus-counter/contents/popup_messages.json';
+            const POPUP_CACHE_KEY = 'lotus_popup_cache_v1';
+            const DAILY_POPUP_STATE_KEY = 'lotus_popup_state_v1';
+            let _popupMessages = [];
+            let _popupIndex = 0;
+
+            // 本地日期字符串（避免 toISOString 的 UTC 偏移导致跨天误判）
+            function todayDateStr() {
+                const d = new Date();
+                const y = d.getFullYear();
+                const m = String(d.getMonth() + 1).padStart(2, '0');
+                const day = String(d.getDate()).padStart(2, '0');
+                return y + '-' + m + '-' + day;
+            }
+            // 记录“今天已展示到第几条”，供下次启动自动播下一条并循环
+            function persistPopupIndex(idx) {
+                try {
+                    localStorage.setItem(DAILY_POPUP_STATE_KEY, JSON.stringify({ date: todayDateStr(), index: idx }));
+                } catch (e) {}
+            }
+            function loadPopupState() {
+                try { return JSON.parse(localStorage.getItem(DAILY_POPUP_STATE_KEY) || 'null'); } catch (e) { return null; }
+            }
+
+            function base64DecodeUnicode(str) {
+                try {
+                    const binary = atob((str || '').replace(/\s/g, ''));
+                    const bytes = new Uint8Array(binary.length);
+                    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+                    return new TextDecoder('utf-8').decode(bytes);
+                } catch (e) { return ''; }
+            }
+
+            // 拉取开示内容：远程优先，失败回退本地缓存
+            function fetchPopupData() {
+                return new Promise(function (resolve) {
+                    const headers = { 'Accept': 'application/vnd.github+json' };
+                    if (typeof GITHUB_FEEDBACK_TOKEN !== 'undefined' && GITHUB_FEEDBACK_TOKEN) {
+                        headers['Authorization'] = 'token ' + GITHUB_FEEDBACK_TOKEN;
+                    }
+                    fetch(POPUP_DATA_URL, { headers: headers })
+                        .then(function (r) { if (!r.ok) throw new Error('http ' + r.status); return r.json(); })
+                        .then(function (data) {
+                            if (data && data.content) {
+                                const parsed = JSON.parse(base64DecodeUnicode(data.content));
+                                let msgs = Array.isArray(parsed) ? parsed : (parsed.messages || []);
+                                // 按日期倒序（新→旧），保证“上一条=更旧 / 下一条=更新”的环形顺序
+                                msgs = msgs.slice().sort(function (a, b) { return (b.date || '').localeCompare(a.date || ''); });
+                                _popupMessages = msgs;
+                                try { localStorage.setItem(POPUP_CACHE_KEY, JSON.stringify({ ts: Date.now(), messages: msgs })); } catch (e) {}
+                                resolve(msgs);
+                            } else { resolve([]); }
+                        })
+                        .catch(function () {
+                            try {
+                                const cached = JSON.parse(localStorage.getItem(POPUP_CACHE_KEY) || '{}');
+                                if (cached && cached.messages) { _popupMessages = cached.messages; resolve(cached.messages); return; }
+                            } catch (e) {}
+                            resolve([]);
+                        });
+                });
+            }
+
+            function renderDailyPopup() {
+                const msg = _popupMessages[_popupIndex];
+                if (!msg) return;
+                const titleEl = document.getElementById('popupTitle');
+                const dateEl = document.getElementById('popupDate');
+                const contentEl = document.getElementById('popupContent');
+                const idxEl = document.getElementById('popupIndex');
+                if (titleEl) titleEl.textContent = msg.title || '每日开示';
+                if (dateEl) dateEl.textContent = msg.date || '';
+                if (contentEl) { contentEl.textContent = msg.content || ''; contentEl.scrollTop = 0; }
+                if (idxEl) idxEl.textContent = (_popupIndex + 1) + ' / ' + _popupMessages.length;
+            }
+
+            function showDailyPopup(startIndex) {
+                if (_popupMessages.length === 0) return;
+                _popupIndex = ((((startIndex || 0) % _popupMessages.length) + _popupMessages.length) % _popupMessages.length);
+                renderDailyPopup();
+                const overlay = document.getElementById('dailyPopup');
+                if (overlay) overlay.style.display = 'flex';
+            }
+
+            function closeDailyPopup() {
+                const overlay = document.getElementById('dailyPopup');
+                if (overlay) overlay.style.display = 'none';
+            }
+
+            // 上一条 = 更旧（索引+1）；到最旧后环形回到最新
+            function popupPrev() {
+                if (_popupMessages.length === 0) return;
+                _popupIndex = (_popupIndex + 1) % _popupMessages.length;
+                renderDailyPopup();
+                persistPopupIndex(_popupIndex);
+            }
+            // 下一条 = 更新（索引-1）；在最新处环形回到最旧（“最开始发的”）
+            function popupNext() {
+                if (_popupMessages.length === 0) return;
+                _popupIndex = (_popupIndex - 1 + _popupMessages.length) % _popupMessages.length;
+                renderDailyPopup();
+                persistPopupIndex(_popupIndex);
+            }
+
+            // 设置页入口：随时打开阅读器（从最新开始）
+            function openDailyReader() {
+                fetchPopupData().then(function () { showDailyPopup(0); });
+            }
+
+            function initDailyPopup() {
+                const settingBtn = document.getElementById('settingDailyBtn');
+                if (settingBtn) settingBtn.addEventListener('click', openDailyReader);
+                const closeX = document.getElementById('popupCloseX');
+                if (closeX) closeX.addEventListener('click', closeDailyPopup);
+                const prev = document.getElementById('popupPrev');
+                if (prev) prev.addEventListener('click', popupPrev);
+                const next = document.getElementById('popupNext');
+                if (next) next.addEventListener('click', popupNext);
+                const overlay = document.getElementById('dailyPopup');
+                if (overlay) overlay.addEventListener('click', function (e) { if (e.target === overlay) closeDailyPopup(); });
+                // 每次启动都弹窗；若今天已弹过一次，再次打开自动播下一条并循环
+                fetchPopupData().then(function () {
+                    if (_popupMessages.length === 0) return;
+                    const today = todayDateStr();
+                    const state = loadPopupState();
+                    let idx;
+                    if (state && state.date === today) {
+                        // 同一天再次打开：从已展示的下一条开始（环形循环）
+                        idx = (state.index + 1) % _popupMessages.length;
+                    } else {
+                        // 今天首次打开：展示最新一条（索引 0）
+                        idx = 0;
+                    }
+                    showDailyPopup(idx);
+                    persistPopupIndex(idx);
                 });
             }
 
@@ -6787,7 +7292,115 @@
             }
             
             console.log('🙏 九品莲台 · 完整版 已加载');
+
+            // 启动后自动检查更新并弹窗提醒用户
+            autoCheckUpdate();
+
+            // 启动后拉取并弹出每日开示（每次启动均显示，可环形翻阅往期）
+            // 模态框 #dailyPopup 在 <script> 之后，须等 DOMContentLoaded 解析完成再 getElementById 绑定监听
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', initDailyPopup);
+            } else {
+                initDailyPopup();
+            }
         })();
     </script>
+    <!-- 意见反馈弹窗 -->
+    <div id="feedbackModal" style="display:none; position:fixed; inset:0; z-index:9999; background:rgba(45,33,22,0.55); -webkit-backdrop-filter:blur(4px); backdrop-filter:blur(4px); align-items:center; justify-content:center; padding:16px;">
+        <div style="background:#fffaf2; width:100%; max-width:520px; max-height:90vh; border-radius:20px; box-shadow:0 24px 70px rgba(0,0,0,0.32); display:flex; flex-direction:column; overflow:hidden; border:1px solid #e3d5c4;">
+            <div style="padding:14px 18px; border-bottom:1px solid #ecdfce; display:flex; align-items:center; justify-content:space-between; gap:10px;">
+                <div style="font-weight:bold; font-size:1.05rem; color:#6a4f32;">💬 意见反馈</div>
+                <button id="feedbackCloseX" style="background:none; border:none; font-size:1.5rem; cursor:pointer; color:#9a8467; line-height:1;">×</button>
+            </div>
+            <div style="padding:16px 18px; overflow-y:auto; display:flex; flex-direction:column; gap:12px;">
+                <div style="font-size:0.8rem; color:#6a4f32; line-height:1.6;">您的建议、问题或功德回向，提交后会发送到开发者邮箱。南无阿弥陀佛。</div>
+                <div style="display:flex; flex-direction:column; gap:4px;">
+                    <label style="font-size:0.78rem; color:#6a4f32;">称呼（选填）</label>
+                    <input id="feedbackName" type="text" placeholder="如：师兄 / 昵称" style="border:1px solid #dacbb8; border-radius:12px; padding:8px 10px; font-size:0.85rem; background:#fffdf9;">
+                </div>
+                <div style="display:flex; flex-direction:column; gap:4px;">
+                    <label style="font-size:0.78rem; color:#6a4f32;">联系方式（选填，方便回复）</label>
+                    <input id="feedbackContact" type="text" placeholder="手机号 / 微信 / 邮箱" style="border:1px solid #dacbb8; border-radius:12px; padding:8px 10px; font-size:0.85rem; background:#fffdf9;">
+                </div>
+                <div style="display:flex; flex-direction:column; gap:4px;">
+                    <label style="font-size:0.78rem; color:#6a4f32;">反馈内容（必填）</label>
+                    <textarea id="feedbackMessage" rows="5" placeholder="请描述您的建议或遇到的问题…" style="border:1px solid #dacbb8; border-radius:12px; padding:8px 10px; font-size:0.85rem; background:#fffdf9; resize:vertical; font-family:inherit;"></textarea>
+                </div>
+                <div id="feedbackStatus" style="font-size:0.78rem; min-height:1em;"></div>
+                <div style="display:flex; gap:10px; margin-top:4px;">
+                    <button id="feedbackSubmitBtn" style="flex:1; background:#b39575; color:#fff; border:none; border-radius:14px; padding:10px; font-size:0.9rem; cursor:pointer;">提交反馈</button>
+                    <a id="feedbackMailtoBtn" href="#" style="flex:1; text-align:center; background:#ede3d6; color:#6a4f32; border:1px solid #dacbb8; border-radius:14px; padding:10px; font-size:0.9rem; cursor:pointer; text-decoration:none; display:flex; align-items:center; justify-content:center;">用邮件发送</a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 每日开示 / 公告弹窗 -->
+    <div id="dailyPopup" style="display:none; position:fixed; inset:0; z-index:10000; background:rgba(45,33,22,0.55); -webkit-backdrop-filter:blur(4px); backdrop-filter:blur(4px); align-items:center; justify-content:center; padding:16px;">
+        <div style="background:#fffaf2; width:100%; max-width:520px; max-height:85vh; border-radius:20px; box-shadow:0 24px 70px rgba(0,0,0,0.32); display:flex; flex-direction:column; overflow:hidden; border:1px solid #e3d5c4;">
+            <div style="padding:14px 18px; border-bottom:1px solid #ecdfce; display:flex; align-items:center; justify-content:space-between; gap:10px;">
+                <div style="font-weight:bold; font-size:1.05rem; color:#6a4f32;">📜 <span id="popupTitle">每日开示</span></div>
+                <button id="popupCloseX" style="background:none; border:none; font-size:1.5rem; cursor:pointer; color:#9a8467; line-height:1;">×</button>
+            </div>
+            <div id="popupDate" style="padding:6px 18px 0; font-size:0.72rem; color:#a08a6e;"></div>
+            <div id="popupContent" style="flex:1 1 auto; min-height:0; overflow-y:auto; padding:12px 18px 18px; font-size:0.92rem; line-height:1.8; color:#4a3a28; white-space:pre-wrap; word-break:break-word;"></div>
+            <div style="padding:10px 18px 16px; border-top:1px solid #ecdfce; display:flex; align-items:center; justify-content:space-between; gap:10px;">
+                <button id="popupPrev" style="background:#ede3d6; color:#6a4f32; border:1px solid #dacbb8; border-radius:14px; padding:8px 14px; font-size:0.85rem; cursor:pointer;">← 上一条</button>
+                <span id="popupIndex" style="font-size:0.72rem; color:#a08a6e;"></span>
+                <button id="popupNext" style="background:#b39575; color:#fff; border:none; border-radius:14px; padding:8px 14px; font-size:0.85rem; cursor:pointer;">下一条 →</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 导入网上 / 网盘经书 -->
+    <div id="importWebModal" style="display:none; position:fixed; inset:0; z-index:10001; background:rgba(45,33,22,0.55); -webkit-backdrop-filter:blur(4px); backdrop-filter:blur(4px); align-items:center; justify-content:center; padding:16px;">
+        <div style="background:#fffaf2; width:100%; max-width:560px; max-height:90vh; border-radius:20px; box-shadow:0 24px 70px rgba(0,0,0,0.32); display:flex; flex-direction:column; overflow:hidden; border:1px solid #e3d5c4;">
+            <div style="padding:14px 18px; border-bottom:1px solid #ecdfce; display:flex; align-items:center; justify-content:space-between; gap:10px;">
+                <div style="font-weight:bold; font-size:1.05rem; color:#6a4f32;">🌐 导入网上经书</div>
+                <button id="importWebCloseX" style="background:none; border:none; font-size:1.5rem; cursor:pointer; color:#9a8467; line-height:1;">×</button>
+            </div>
+            <div style="padding:14px 18px; overflow-y:auto; display:flex; flex-direction:column; gap:12px;">
+                <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                    <button class="iw-tab" data-tab="url" style="background:#b39575; color:#fff; border:none; border-radius:30px; padding:7px 16px; font-size:0.8rem; cursor:pointer;">网页链接</button>
+                    <button class="iw-tab" data-tab="disk" style="background:#ede3d6; color:#6a4f32; border:1px solid #dacbb8; border-radius:30px; padding:7px 16px; font-size:0.8rem; cursor:pointer;">网盘直链</button>
+                    <button class="iw-tab" data-tab="paste" style="background:#ede3d6; color:#6a4f32; border:1px solid #dacbb8; border-radius:30px; padding:7px 16px; font-size:0.8rem; cursor:pointer;">粘贴文本</button>
+                </div>
+
+                <div id="iwUrlWrap" style="display:flex; flex-direction:column; gap:4px;">
+                    <label style="font-size:0.78rem; color:#6a4f32;">网页地址（文章页 URL）</label>
+                    <input id="iwUrl" type="text" placeholder="https://example.com/xxx.html" style="border:1px solid #dacbb8; border-radius:30px; padding:9px 14px; font-size:0.85rem; background:#fffdf9;">
+                    <div style="font-size:0.72rem; color:#a08a6e; line-height:1.5;">支持普通网页与文章页。部分站点（微信/知乎等）需登录或有反爬，可能取不到内容；此时请用「粘贴文本」。</div>
+                </div>
+
+                <div id="iwDiskWrap" style="display:none; display:flex; flex-direction:column; gap:4px;">
+                    <label style="font-size:0.78rem; color:#6a4f32;">网盘直链（可直接下载 .txt / .md 的链接）</label>
+                    <input id="iwDiskUrl" type="text" placeholder="https://.../fojing.txt" style="border:1px solid #dacbb8; border-radius:30px; padding:9px 14px; font-size:0.85rem; background:#fffdf9;">
+                    <div style="font-size:0.72rem; color:#a08a6e; line-height:1.5;">百度/阿里等分享页通常需提取码、并非直链，无法直接获取。请用支持「直链」的导出方式，或把内容导出为 txt 后用「粘贴文本」。</div>
+                </div>
+
+                <div id="iwPasteWrap" style="display:none; display:flex; flex-direction:column; gap:4px;">
+                    <label style="font-size:0.78rem; color:#6a4f32;">粘贴经文文本</label>
+                    <textarea id="iwPaste" rows="6" placeholder="把经文内容粘贴到这里…" style="border:1px solid #dacbb8; border-radius:14px; padding:8px 10px; font-size:0.85rem; background:#fffdf9; resize:vertical; font-family:inherit;"></textarea>
+                </div>
+
+                <button id="iwFetchBtn" style="background:#b39575; color:#fff; border:none; border-radius:30px; padding:11px; font-size:0.9rem; cursor:pointer; box-shadow:0 3px 0 #6a4f32;">获取内容</button>
+                <div id="iwStatus" style="font-size:0.78rem; min-height:1em; color:#9a6b3a;"></div>
+
+                <div style="display:flex; flex-direction:column; gap:4px;">
+                    <label style="font-size:0.78rem; color:#6a4f32;">经书标题</label>
+                    <input id="iwTitle" type="text" placeholder="（自动识别，可修改）" style="border:1px solid #dacbb8; border-radius:30px; padding:9px 14px; font-size:0.85rem; background:#fffdf9;">
+                </div>
+                <div style="display:flex; flex-direction:column; gap:4px;">
+                    <label style="font-size:0.78rem; color:#6a4f32;">经文内容（获取后可编辑）</label>
+                    <textarea id="iwContent" rows="8" placeholder="经文正文将显示在这里…" style="border:1px solid #dacbb8; border-radius:14px; padding:8px 10px; font-size:0.85rem; background:#fffdf9; resize:vertical; font-family:inherit;"></textarea>
+                </div>
+            </div>
+            <div style="padding:10px 18px 16px; border-top:1px solid #ecdfce; display:flex; gap:10px;">
+                <button id="iwSaveBtn" style="flex:1; background:#b39575; color:#fff; border:none; border-radius:30px; padding:11px; font-size:0.9rem; cursor:pointer; box-shadow:0 3px 0 #6a4f32;">保存为经书</button>
+                <button id="iwCancelBtn" style="flex:1; background:#ede3d6; color:#6a4f32; border:1px solid #dacbb8; border-radius:30px; padding:11px; font-size:0.9rem; cursor:pointer;">取消</button>
+            </div>
+        </div>
+    </div>
+
 </body>
 </html>
