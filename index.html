@@ -757,6 +757,9 @@
 
         .fullscreen-content {
             flex: 1;
+            min-width: 0;
+            width: 100%;
+            box-sizing: border-box;
             padding: 72px 20px 56px 20px;
             overflow: hidden;
             font-size: 1.2rem;
@@ -3587,7 +3590,7 @@
             }
 
             // 版本管理
-            const APP_VERSION = '1.0.1.1'; // 四段式版本号：A.B.C.D。每段 0-9，满 9 进一（如 D:9→0 且 C+1）。每次修改代码后 D+1；D 到 9 后 C+1、D 归零。请同步修改 android-app/app/build.gradle 的 versionCode(单调递增整数) 与 versionName
+            const APP_VERSION = '1.0.1.2'; // 四段式版本号：A.B.C.D。每段 0-9，满 9 进一（如 D:9→0 且 C+1）。每次修改代码后 D+1；D 到 9 后 C+1、D 归零。请同步修改 android-app/app/build.gradle 的 versionCode(单调递增整数) 与 versionName
             // 意见反馈后端：复用检查更新所用的公开仓库 jackyleo520/lotus-counter，提交时前端直接 POST 创建 issue，
             // 反馈自动归档进仓库 issue 列表（可分类/回复）。注意：token 暴露在客户端 JS，公开 issue 任何人可见，请勿填敏感隐私。
             const GITHUB_ISSUES_URL = 'https://api.github.com/repos/jackyleo520/lotus-counter/issues';
@@ -4658,7 +4661,7 @@
             // 使用内容盒子的真实宽高作为测量基准，忽略 padding 干扰，
             // 每页尽量填满可视区域，允许段落跨页，下一页内容紧接上一页。
             // 字数测量（仅 2 次回流测出行高与每行字数，避免逐段二分的上万次强制重排导致大书卡死白屏）
-            function measureReaderMetrics(reader) {
+            function measureReaderMetrics(reader, content) {
                 if (!reader) return null;
                 const cs = getComputedStyle(reader);
                 const padTop = parseFloat(cs.paddingTop) || 0;
@@ -4679,12 +4682,21 @@
                 m.style.wordSpacing = cs.wordSpacing;
                 m.style.textAlign = cs.textAlign;
                 document.body.appendChild(m);
-                const sample = '测'.repeat(120);
-                m.textContent = sample + '\n' + sample + '\n' + sample + '\n' + sample + '\n' + sample;
+                // 行高：用 CJK 样张测 5 行更稳定
+                m.textContent = '测'.repeat(20) + '\n' + '测'.repeat(20) + '\n' + '测'.repeat(20) + '\n' + '测'.repeat(20) + '\n' + '测'.repeat(20);
                 const lineHeight = (m.offsetHeight / 5) || parseFloat(cs.lineHeight) || 20;
-                m.textContent = '测'.repeat(400);
+                // 内容感知样张：按本经文 CJK/Latin 实际占比混合，避免“用中文测字测量、正文却是半角拉丁”
+                // 导致每行字数被严重低估、整页大面积留白（如罗马拼音咒语约占 94%）。
+                const cjkMatches = (content || '').match(/[㐀-鿿豈-﫿]/g);
+                const cjk = cjkMatches ? cjkMatches.length : 0;
+                const ratio = (content && content.length) ? Math.min(1, cjk / content.length) : 1;
+                const N = 600;
+                const cjkN = Math.max(0, Math.round(N * ratio));
+                const latN = N - cjkN;
+                const sample = '测'.repeat(cjkN) + 'abcdefghij'.repeat(Math.ceil(latN / 10));
+                m.textContent = sample;
                 const linesFit = Math.max(1, Math.round(m.offsetHeight / lineHeight));
-                const charsPerLine = Math.max(1, Math.floor(400 / linesFit));
+                const charsPerLine = Math.max(1, Math.round(sample.length / linesFit));
                 document.body.removeChild(m);
                 const linesPerPage = Math.max(1, Math.floor(availableHeight / lineHeight));
                 const charsPerPage = Math.max(charsPerLine, linesPerPage * charsPerLine);
@@ -4729,6 +4741,77 @@
                     get done() { return pIdx >= paragraphs.length && rest === ''; },
                     fillUpTo: function (n) { while (pages.length < n && fillOne()) {} return pages; },
                     fillChunk: function (c) { let i = 0; while (i < c && fillOne()) i++; return pages; },
+                    fillAll: function () { while (fillOne()) {} return pages; }
+                };
+            }
+
+            // 基于真实渲染高度的分页器（无缝铺满、绝不截断丢失文字）：
+            // 用与阅读容器同款的隐藏探针测量“一段文字能否塞进一页”，逐段累积，超出则另起一页；
+            // 单段超页时二分切分。每段/每页仅 1 次回流测量，且放在空闲分批改排，不卡首屏。
+            function makeHeightPaginator(contentArg, container) {
+                if (!container) return null;
+                const cs = getComputedStyle(container);
+                const padTop = parseFloat(cs.paddingTop) || 0;
+                const padBottom = parseFloat(cs.paddingBottom) || 0;
+                const padLeft = parseFloat(cs.paddingLeft) || 0;
+                const padRight = parseFloat(cs.paddingRight) || 0;
+                const availH = (window.innerHeight || document.documentElement.clientHeight || 0) - padTop - padBottom;
+                const availW = container.clientWidth - padLeft - padRight;
+                if (availH <= 0 || availW <= 0) return null;
+
+                // 隐藏探针：复制阅读容器的字号/字体/行高/对齐/断词与内边距，宽度等同于正文区
+                const probe = document.createElement('div');
+                probe.style.cssText = 'position:absolute;left:-99999px;top:0;visibility:hidden;overflow:hidden;box-sizing:content-box;white-space:pre-wrap;word-break:break-all;overflow-wrap:break-word;';
+                probe.style.width = availW + 'px';
+                probe.style.paddingTop = padTop + 'px';
+                probe.style.paddingBottom = padBottom + 'px';
+                probe.style.fontSize = cs.fontSize;
+                probe.style.fontFamily = cs.fontFamily;
+                probe.style.fontWeight = cs.fontWeight;
+                probe.style.lineHeight = cs.lineHeight;
+                probe.style.letterSpacing = cs.letterSpacing;
+                probe.style.textAlign = cs.textAlign;
+                document.body.appendChild(probe);
+                let probeRemoved = false;
+                function cleanup() { if (!probeRemoved && probe.parentNode) { probe.parentNode.removeChild(probe); probeRemoved = true; } }
+                // scrollHeight 含上下内边距，比较阈值需加回 padTop/padBottom
+                const probeLimit = availH + padTop + padBottom;
+                function fits(str) { probe.textContent = str; return probe.scrollHeight <= probeLimit; }
+
+                const paragraphs = contentArg.replace(/\r\n?/g, '\n').split('\n').filter(function (p) { return p.length > 0; });
+                const pages = [];
+                let pIdx = 0, rest = '', cur = '';
+                function pushCur() { if (cur) { pages.push(cur.replace(/\s+$/, '')); cur = ''; } }
+                function fillOne() {
+                    if (pIdx >= paragraphs.length && rest === '') { cleanup(); return false; }
+                    while (true) {
+                        if (rest === '') { if (pIdx >= paragraphs.length) break; rest = paragraphs[pIdx++]; }
+                        const cand = cur ? (cur + '\n' + rest) : rest;
+                        if (fits(cand)) { cur = cand; rest = ''; continue; }
+                        if (!cur) {
+                            // 单段超页：二分切到刚好塞满（仅超长段落触发，次数很少）
+                            let lo = 1, hi = rest.length;
+                            while (lo < hi) {
+                                const mid = Math.ceil((lo + hi) / 2);
+                                if (fits(rest.slice(0, mid))) lo = mid; else hi = mid - 1;
+                            }
+                            const cut = Math.max(1, lo);
+                            pages.push(rest.slice(0, cut).replace(/\s+$/, ''));
+                            rest = rest.slice(cut);
+                            return true;
+                        } else {
+                            pushCur();
+                            return true; // rest 留给下一页
+                        }
+                    }
+                    pushCur();
+                    return true;
+                }
+                return {
+                    pages: pages,
+                    get done() { return pIdx >= paragraphs.length && rest === ''; },
+                    fillUpTo: function (n) { while (pages.length < n && fillOne()) {} if (this.done) cleanup(); return pages; },
+                    fillChunk: function (c) { let i = 0; while (i < c && fillOne()) i++; if (this.done) cleanup(); return pages; },
                     fillAll: function () { while (fillOne()) {} return pages; }
                 };
             }
@@ -4843,8 +4926,9 @@
                 c.style.transition = 'none';
                 if (!hadHidden) reader.classList.add('reader-ui-hidden');
                 void reader.offsetHeight; // 强制回流拿到最终尺寸
-                const metrics = measureReaderMetrics(c);
-                const pages = metrics ? createSutraPaginator(content, metrics.charsPerPage).fillAll() : [content];
+                const metrics = measureReaderMetrics(c, content);
+                const hp = makeHeightPaginator(content, c);
+                const pages = hp ? hp.fillAll() : (metrics ? createSutraPaginator(content, metrics.charsPerPage).fillAll() : [content]);
                 c.style.transition = oldTransition;
                 if (!hadHidden) reader.classList.remove('reader-ui-hidden');
                 return pages;
@@ -4889,20 +4973,28 @@
                 showReaderLoading(); // 大书分页期间显示「正在排版」，避免白屏卡死无反馈
 
                 setTimeout(() => {
-                    const metrics = measureReaderMetrics(content);
-                    if (!metrics) {
+                    const metrics = measureReaderMetrics(content, s.content);
+                    const hp = makeHeightPaginator(s.content, content);
+                    if (hp) {
+                        // 基于真实渲染高度分页：无缝铺满、绝不截断；先排前几页立即出首页，其余后台续排
+                        sutraPaginator = hp;
+                        sutraPagesEst = metrics ? Math.max(1, Math.ceil(s.content.length / metrics.charsPerPage)) : s.content.length;
+                        sutraPaginator.fillUpTo(LAZY_PRELOAD);
+                        sutraPages = sutraPaginator.pages;
+                        totalPages = Math.max(sutraPagesEst, sutraPaginator.pages.length);
+                        scheduleLazyPagination(index, sutraPaginator);
+                    } else if (!metrics) {
                         // 测量失败兜底：直接全量同步分页（旧逻辑）
                         sutraPages = paginateNow(s.content);
                         totalPages = sutraPages.length;
                         sutraPaginator = null;
                     } else {
-                        // 懒加载：先排前几页立即出首页，其余在后台/翻页时续排
                         sutraPaginator = createSutraPaginator(s.content, metrics.charsPerPage);
                         sutraPagesEst = Math.max(1, Math.ceil(s.content.length / metrics.charsPerPage));
                         sutraPaginator.fillUpTo(LAZY_PRELOAD);
                         sutraPages = sutraPaginator.pages;
                         totalPages = Math.max(sutraPagesEst, sutraPaginator.pages.length);
-                        scheduleLazyPagination(index, sutraPaginator); // 后台补齐剩余页
+                        scheduleLazyPagination(index, sutraPaginator);
                     }
                     currentPage = Math.min(s.page || 0, Math.max(0, totalPages - 1));
                     s.page = currentPage;
@@ -4924,7 +5016,7 @@
                 const text = sutraPages[page] || '';
                 const fullscreenContent = document.getElementById('fullscreenContent');
                 if (fullscreenContent) {
-                    fullscreenContent.innerHTML = text;
+                    fullscreenContent.textContent = text;
                     // 翻书动画：重启方向感知的滑入动画
                     fullscreenContent.classList.remove('flip-next', 'flip-prev');
                     void fullscreenContent.offsetWidth; // 强制回流以便重新触发动画
@@ -5077,7 +5169,7 @@
                 const s = sutraList[currentSutraIndex];
                 const text = sutraPages[currentPage] || '';
                 const fullscreenContent = document.getElementById('fullscreenContent');
-                if (fullscreenContent) fullscreenContent.innerHTML = text;
+                if (fullscreenContent) fullscreenContent.textContent = text;
                 updateReaderProgressUI(currentPage);
                 s.progress = Math.round((currentPage / totalPages) * 100);
                 s.page = currentPage;
@@ -7125,14 +7217,29 @@
                 const day = String(d.getDate()).padStart(2, '0');
                 return y + '-' + m + '-' + day;
             }
-            // 记录“今天已展示到第几条”，供下次启动自动播下一条并循环
-            function persistPopupIndex(idx) {
+            // 记录“今天已展示过哪些开示”，供下次启动自动播下一条、同一天不重复、循环显示
+            function persistPopupState(seenArr, lastIdx) {
                 try {
-                    localStorage.setItem(DAILY_POPUP_STATE_KEY, JSON.stringify({ date: todayDateStr(), index: idx }));
+                    localStorage.setItem(DAILY_POPUP_STATE_KEY, JSON.stringify({ date: todayDateStr(), seen: seenArr, last: lastIdx }));
                 } catch (e) {}
             }
             function loadPopupState() {
                 try { return JSON.parse(localStorage.getItem(DAILY_POPUP_STATE_KEY) || 'null'); } catch (e) { return null; }
+            }
+            // 在 ring 顺序里从 last 之后挑第一个“今天还没看过”的开示；今天全看过了则返回 (last+1)%total 循环
+            function pickNextUnseen(last, seen, total) {
+                for (let step = 1; step <= total; step++) {
+                    const cand = (last + step) % total;
+                    if (seen.indexOf(cand) === -1) return cand;
+                }
+                return (last + 1) % total;
+            }
+            // 手动翻页后把当前条标记为已看，并记住位置（下次启动从当前位置继续往下推）
+            function markPopupSeen(idx) {
+                const st = loadPopupState();
+                const seen = (st && st.date === todayDateStr() && Array.isArray(st.seen)) ? st.seen.slice() : [];
+                if (seen.indexOf(idx) === -1) seen.push(idx);
+                persistPopupState(seen, idx);
             }
 
             function base64DecodeUnicode(str) {
@@ -7205,14 +7312,14 @@
                 if (_popupMessages.length === 0) return;
                 _popupIndex = (_popupIndex + 1) % _popupMessages.length;
                 renderDailyPopup();
-                persistPopupIndex(_popupIndex);
+                markPopupSeen(_popupIndex);
             }
             // 下一条 = 更新（索引-1）；在最新处环形回到最旧（“最开始发的”）
             function popupNext() {
                 if (_popupMessages.length === 0) return;
                 _popupIndex = (_popupIndex - 1 + _popupMessages.length) % _popupMessages.length;
                 renderDailyPopup();
-                persistPopupIndex(_popupIndex);
+                markPopupSeen(_popupIndex);
             }
 
             // 设置页入口：随时打开阅读器（从最新开始）
@@ -7231,21 +7338,25 @@
                 if (next) next.addEventListener('click', popupNext);
                 const overlay = document.getElementById('dailyPopup');
                 if (overlay) overlay.addEventListener('click', function (e) { if (e.target === overlay) closeDailyPopup(); });
-                // 每次启动都弹窗；若今天已弹过一次，再次打开自动播下一条并循环
+                // 每次启动都弹窗；同一天多次启动不重复显示同一条，自动播下一条并循环
                 fetchPopupData().then(function () {
-                    if (_popupMessages.length === 0) return;
+                    const total = _popupMessages.length;
+                    if (total === 0) return;
                     const today = todayDateStr();
-                    const state = loadPopupState();
+                    const st = loadPopupState();
+                    const seen = (st && st.date === today && Array.isArray(st.seen)) ? st.seen.slice() : [];
+                    const last = (st && st.date === today && typeof st.last === 'number') ? st.last : -1;
                     let idx;
-                    if (state && state.date === today) {
-                        // 同一天再次打开：从已展示的下一条开始（环形循环）
-                        idx = (state.index + 1) % _popupMessages.length;
+                    if (seen.length >= total) {
+                        // 今天已全部看过：循环回到下一条（已阅尽，允许重复）
+                        idx = (last + 1) % total;
                     } else {
-                        // 今天首次打开：展示最新一条（索引 0）
-                        idx = 0;
+                        // 今天还有没看过的：按环形顺序从 last 之后挑第一条未看过的
+                        idx = pickNextUnseen(last, seen, total);
                     }
                     showDailyPopup(idx);
-                    persistPopupIndex(idx);
+                    if (seen.indexOf(idx) === -1) seen.push(idx);
+                    persistPopupState(seen, idx);
                 });
             }
 
