@@ -2,7 +2,7 @@
 """发布 v1.0.1.1：复制 APK + 创建 GitHub Release + 上传资源。"""
 import json, urllib.request, urllib.error, urllib.parse, os, glob, shutil
 
-TOKEN = "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"
+TOKEN = os.environ.get("LOTUS_GH_TOKEN") or os.environ.get("GH_TOKEN") or ""
 REPO = "jackyleo520/lotus-counter"
 API = "https://api.github.com/repos/" + REPO
 TAG = "v1.0.1.1"

@@ -1,0 +1,587 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>九品莲台 · 每日开示管理</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+:root {
+    --gold:#b39575; --gold-dark:#8a6d4a; --gold-light:#d4bc96;
+    --bg:#f5ede0; --card:#fffdf8; --text:#3d2e1f;
+    --accent:#c0392b; --ok:#27ae60; --warn:#e67e22;
+}
+html,body { height:100%; font-family:'PingFang SC','Microsoft YaHei','Noto Sans SC',sans-serif; background:var(--bg); color:var(--text); overflow:hidden; }
+
+/* ---- Header ---- */
+.app-header {
+    background: linear-gradient(135deg, var(--gold) 0%, var(--gold-dark) 100%);
+    color:#fff; padding:14px 16px 10px;
+    display:flex; align-items:center; justify-content:space-between;
+    box-shadow:0 2px 12px rgba(139,115,85,0.25);
+    position:relative; z-index:10;
+}
+.app-header h1 { font-size:1rem; font-weight:600; letter-spacing:1px; }
+.header-status { font-size:0.72rem; opacity:0.85; max-width:45%; text-align:right; line-height:1.3; }
+
+/* ---- Tip Bar ---- */
+.tip-bar {
+    font-size:0.75rem; color:var(--gold-dark); padding:8px 14px;
+    background:rgba(212,188,150,0.35); line-height:1.5;
+    border-bottom:1px solid rgba(179,149,117,0.2);
+}
+
+/* ---- Main Layout ---- */
+.main-body { display:flex; flex-direction:column; height:calc(100vh - 90px); }
+
+/* ---- List Section ---- */
+.list-section { flex:0 0 auto; max-height:38vh; border-bottom:2px solid rgba(179,149,117,0.25); display:flex; flex-direction:column; }
+.list-header {
+    font-size:0.78rem; font-weight:600; padding:8px 14px 4px;
+    color:var(--gold-dark); display:flex; justify-content:space-between; align-items:center;
+}
+.list-count { font-size:0.7rem; font-weight:400; color:#999; }
+.msg-list { flex:1; overflow-y:auto; padding:4px 10px 6px; -webkit-overflow-scrolling:touch; }
+.msg-item {
+    background:var(--card); border-radius:10px; padding:10px 12px;
+    margin-bottom:6px; border:1px solid rgba(179,149,117,0.2);
+    box-shadow:0 1px 4px rgba(139,115,85,0.08);
+    cursor:pointer; transition:all 0.18s ease; position:relative;
+}
+.msg-item.selected {
+    border-color:var(--gold); background:linear-gradient(135deg,#fff9f2 0%,#fff5e8 100%);
+    box-shadow:0 2px 10px rgba(179,149,117,0.25);
+}
+.msg-item:active { transform:scale(0.985); }
+.msg-date { font-size:0.78rem; font-weight:600; color:var(--gold-dark); }
+.msg-title { font-size:0.82rem; color:var(--text); margin-top:2px; line-height:1.3;
+    display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+.msg-seq { font-size:0.68rem; color:#aaa; margin-left:4px; }
+.msg-del-hint { position:absolute; right:8px; top:8px; font-size:0.65rem; color:var(--accent); opacity:0; transition:opacity 0.2s; }
+.msg-item.selected .msg-del-hint { opacity:1; }
+
+/* ---- Edit Section ---- */
+.edit-section { flex:1; display:flex; flex-direction:column; min-height:0; padding:10px 14px; overflow-y:auto; -webkit-overflow-scrolling:touch; }
+.form-row { display:flex; gap:8px; margin-bottom:8px; align-items:center; }
+.form-row label { font-size:0.78rem; font-weight:600; color:var(--gold-dark); white-space:nowrap; }
+.form-input {
+    flex:1; border:1.5px solid #ddd; border-radius:10px; padding:8px 10px;
+    font-size:0.85rem; background:#fff; color:var(--text); outline:none; transition:border-color 0.2s;
+    font-family:inherit;
+}
+.form-input:focus { border-color:var(--gold); box-shadow:0 0 0 3px rgba(179,149,117,0.15); }
+#inputDate { flex:0 0 120px; }
+#inputTitle { flex:1; }
+.form-textarea {
+    width:100%; flex:1; min-height:140px; border:1.5px solid #ddd; border-radius:10px;
+    padding:10px; font-size:0.85rem; resize:none; outline:none; background:#fff; color:var(--text);
+    line-height:1.7; font-family:inherit; transition:border-color 0.2s;
+}
+.form-textarea:focus { border-color:var(--gold); box-shadow:0 0 0 3px rgba(179,149,117,0.15); }
+
+/* ---- Action Bar ---- */
+.action-bar {
+    display:flex; gap:8px; padding:8px 14px 12px;
+    background:var(--bg); border-top:1px solid rgba(179,149,117,0.15);
+    flex-shrink:0;
+}
+.btn {
+    flex:1; border:none; border-radius:12px; padding:10px 4px;
+    font-size:0.8rem; font-weight:600; cursor:pointer;
+    font-family:inherit; transition:all 0.2s ease; text-align:center;
+    white-space:nowrap; letter-spacing:0.3px;
+}
+.btn:active { transform:scale(0.95); }
+.btn-primary { background:linear-gradient(135deg,var(--gold),var(--gold-dark)); color:#fff; box-shadow:0 3px 0 var(--gold-dark); }
+.btn-primary:active { box-shadow:0 1px 0 var(--gold-dark); transform:translateY(2px); }
+.btn-danger { background:linear-gradient(135deg,#e74c3c,#c0392b); color:#fff; box-shadow:0 3px 0 #96281b; }
+.btn-danger:active { box-shadow:0 1px 0 #96281b; transform:translateY(2px); }
+.btn-secondary { background:linear-gradient(135deg,#ecf0f1,#bdc3c7); color:var(--text); box-shadow:0 3px 0 #95a5a6; }
+.btn-secondary:active { box-shadow:0 1px 0 #95a5a6; transform:translateY(2px); }
+.btn-refresh { background:linear-gradient(135deg,#3498db,#2980b9); color:#fff; box-shadow:0 3px 0 #1f618d; flex:0 0 70px; }
+.btn-refresh:active { box-shadow:0 1px 0 #1f618d; transform:translateY(2px); }
+
+/* ---- Mode Badge ---- */
+.mode-badge {
+    display:inline-block; font-size:0.68rem; padding:2px 8px; border-radius:8px;
+    margin-bottom:6px; font-weight:500;
+}
+.mode-new { background:#d5f5e3; color:#1e8449; }
+.mode-edit { background:#fcf3cf; color:#9a7d0e; }
+
+/* ---- Loading Overlay ---- */
+.loading-overlay {
+    position:fixed; inset:0; background:rgba(245,237,224,0.85); z-index:999;
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    opacity:0; pointer-events:none; transition:opacity 0.25s;
+}
+.loading-overlay.show { opacity:1; pointer-events:auto; }
+.spinner {
+    width:36px; height:36px; border:3px solid rgba(179,149,117,0.2);
+    border-top-color:var(--gold); border-radius:50%;
+    animation:spin 0.7s linear infinite;
+}
+@keyframes spin { to{transform:rotate(360deg)} }
+.loading-text { margin-top:10px; font-size:0.82rem; color:var(--gold-dark); }
+
+/* ---- Toast ---- */
+.toast-container {
+    position:fixed; bottom:20px; left:50%; transform:translateX(-50%);
+    z-index:1000; display:flex; flex-direction:column; gap:6px; pointer-events:none;
+}
+.toast {
+    background:rgba(61,46,31,0.92); color:#fff; padding:10px 20px; border-radius:12px;
+    font-size:0.8rem; text-align:center; animation:toastIn 0.3s ease, toastOut 0.3s ease 2.3s forwards;
+    white-space:nowrap; max-width:85vw;
+}
+.toast.ok { background:rgba(39,174,96,0.92); }
+.toast.err { background:rgba(192,57,43,0.92); }
+@keyframes toastIn { from{opacity:0;transform:translateY(16px)} to{opacity:1;transform:translateY(0)} }
+@keyframes toastOut { from{opacity:1} to{opacity:0;transform:translateY(-8px)} }
+
+/* ---- Empty State ---- */
+.empty-state { text-align:center; padding:24px 16px; color:#bbb; font-size:0.82rem; }
+.empty-state .icon { font-size:2rem; margin-bottom:8px; opacity:0.4; }
+
+/* ---- Confirm Dialog ---- */
+.dialog-overlay {
+    position:fixed; inset:0; background:rgba(0,0,0,0.4); z-index:500;
+    display:flex; align-items:center; justify-content:center; opacity:0; pointer-events:none; transition:opacity 0.2s;
+}
+.dialog-overlay.show { opacity:1; pointer-events:auto; }
+.dialog-box {
+    background:var(--card); border-radius:16px; padding:20px; margin:20px;
+    width:82vw; max-width:340px; box-shadow:0 8px 32px rgba(0,0,0,0.2);
+    transform:scale(0.92); transition:transform 0.2s;
+}
+.dialog-overlay.show .dialog-box { transform:scale(1); }
+.dialog-title { font-size:0.9rem; font-weight:700; margin-bottom:8px; color:var(--text); }
+.dialog-body { font-size:0.8rem; color:#666; line-height:1.55; margin-bottom:16px; }
+.dialog-btns { display:flex; gap:8px; justify-content:flex-end; }
+.dialog-btn {
+    border:none; border-radius:10px; padding:8px 18px; font-size:0.8rem; font-weight:600;
+    cursor:pointer; font-family:inherit; transition:all 0.15s;
+}
+.dialog-btn-cancel { background:#eee; color:#666; }
+.dialog-btn-cancel:active { background:#ddd; }
+.dialog-btn-ok { background:var(--accent); color:#fff; }
+.dialog-btn-ok:active { background:#a93226; }
+
+/* ---- Token Setup ---- */
+.token-bar {
+    display:flex; gap:6px; padding:6px 14px 0; align-items:center;
+    background:rgba(230,126,34,0.08); border-bottom:1px solid rgba(230,126,34,0.2);
+}
+.token-bar label { font-size:0.72rem; color:var(--warn); white-space:nowrap; font-weight:600; }
+.token-input {
+    flex:1; border:1px solid rgba(230,126,34,0.3); border-radius:8px;
+    padding:5px 8px; font-size:0.75rem; background:#fffef8; outline:none; font-family:monospace;
+}
+.token-input:focus { border-color:var(--warn); }
+.token-save { background:var(--warn); color:#fff; border:none; border-radius:8px; padding:5px 12px; font-size:0.72rem; font-weight:600; cursor:pointer; font-family:inherit; }
+.token-save:active { opacity:0.8; }
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<div class="app-header">
+    <h1>🪷 每日开示管理</h1>
+    <div class="header-status" id="headerStatus">准备就绪</div>
+</div>
+
+<!-- Tip -->
+<div class="tip-bar">只需粘贴正文即可 · 选中再发布=修改 · 先新建再发布=新增（同日期不覆盖）</div>
+
+<!-- Token setup bar -->
+<div class="token-bar" id="tokenBar" style="display:none;">
+    <label>🔑 GitHub Token:</label>
+    <input class="token-input" id="tokenInput" placeholder="ghp_或gho_开头..." type="password">
+    <button class="token-save" onclick="saveToken()">保存</button>
+</div>
+
+<!-- Main Body -->
+<div class="main-body">
+
+    <!-- Message List -->
+    <div class="list-section">
+        <div class="list-header">
+            <span>📜 全部开示（最新在上）</span>
+            <span class="list-count" id="listCount">0 条</span>
+        </div>
+        <div class="msg-list" id="msgList"></div>
+    </div>
+
+    <!-- Edit Form -->
+    <div class="edit-section">
+        <div class="mode-badge mode-new" id="modeBadge">✨ 新建模式</div>
+        <div class="form-row">
+            <label>📅 日期</label>
+            <input class="form-input" type="date" id="inputDate">
+            <label style="margin-left:4px;">📝 标题</label>
+            <input class="form-input" type="text" id="inputTitle" placeholder="留空则自动生成">
+        </div>
+        <textarea class="form-textarea" id="inputContent" placeholder="在此粘贴开示正文...&#10;&#10;支持多行，直接从微信/网页复制粘贴即可。"></textarea>
+    </div>
+
+    <!-- Action Buttons -->
+    <div class="action-bar">
+        <button class="btn btn-refresh" onclick="refreshList()">🔄 刷新</button>
+        <button class="btn btn-primary" onclick="doPublish()">📤 发布/更新</button>
+        <button class="btn btn-danger" onclick="doDelete()">🗑 删除</button>
+        <button class="btn btn-secondary" onclick="newEntry()">➕ 新建</button>
+    </div>
+</div>
+
+<!-- Loading -->
+<div class="loading-overlay" id="loadingOverlay">
+    <div class="spinner"></div>
+    <div class="loading-text" id="loadingText">正在处理...</div>
+</div>
+
+<!-- Toast Container -->
+<div class="toast-container" id="toastContainer"></div>
+
+<!-- Confirm Dialog -->
+<div class="dialog-overlay" id="dialogOverlay">
+    <div class="dialog-box">
+        <div class="dialog-title" id="dialogTitle">确认</div>
+        <div class="dialog-body" id="dialogBody"></div>
+        <div class="dialog-btns">
+            <button class="dialog-btn dialog-btn-cancel" onclick="closeDialog()">取消</button>
+            <button class="dialog-btn dialog-btn-ok" id="dialogOkBtn">确定</button>
+        </div>
+    </div>
+</div>
+
+<script>
+// ==================== 配置 ====================
+const REPO = 'jackyleo520/lotus-counter';
+const PATH = 'popup_messages.json';
+const BRANCH = 'main';
+const API_BASE = `https://api.github.com/repos/${REPO}/contents/${PATH}`;
+const LS_TOKEN_KEY = 'popup_pub_token';
+
+let messages = [];
+let sha = null;
+let editingId = null;
+
+// ==================== 工具函数 ====================
+function $(id) { return document.getElementById(id); }
+
+function todayISO() {
+    const d = new Date();
+    return d.getFullYear() + '-' +
+        String(d.getMonth()+1).padStart(2,'0') + '-' +
+        String(d.getDate()).padStart(2,'0');
+}
+
+function genId() {
+    if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+        return crypto.randomUUID().replace(/-/g,'').substring(0,10);
+    }
+    return Math.random().toString(36).substring(2,12) + Date.now().toString(36);
+}
+
+function b64enc(str) {
+    if (typeof btoa === 'function') return btoa(unescape(encodeURIComponent(str)));
+    // Fallback for Unicode
+    return Buffer ? Buffer.from(str).toString('base64') : str;
+}
+
+function getToken() {
+    return localStorage.getItem(LS_TOKEN_KEY) || '';
+}
+
+function setToken(t) {
+    localStorage.setItem(LS_TOKEN_KEY, t);
+    $('tokenBar').style.display = t ? 'none' : 'flex';
+}
+
+// ==================== UI 反馈 ====================
+function showLoading(text) {
+    $('loadingText').textContent = text || '正在处理...';
+    $('loadingOverlay').classList.add('show');
+}
+function hideLoading() { $('loadingOverlay').classList.remove('show'); }
+
+function showToast(msg, type) {
+    const el = document.createElement('div');
+    el.className = 'toast' + (type ? ' ' + type : '');
+    el.textContent = msg;
+    $('toastContainer').appendChild(el);
+    setTimeout(() => el.remove(), 2600);
+}
+
+function setStatus(msg) { $('headerStatus').textContent = msg; }
+
+function updateModeBadge() {
+    const badge = $('modeBadge');
+    if (editingId) {
+        badge.className = 'mode-badge mode-edit';
+        badge.textContent = '✏️ 编辑模式（修改选中条）';
+    } else {
+        badge.className = 'mode-badge mode-new';
+        badge.textContent = '✨ 新建模式（将新增一条）';
+    }
+}
+
+// ==================== 对话框 ====================
+let dialogResolve = null;
+function showDialog(title, body, okText) {
+    return new Promise(resolve => {
+        dialogResolve = resolve;
+        $('dialogTitle').textContent = title;
+        $('dialogBody').innerHTML = body.replace(/\n/g,'<br>');
+        $('dialogOkBtn').textContent = okText || '确定';
+        $('dialogOverlay').classList.add('show');
+    });
+}
+function closeDialog(val) {
+    $('dialogOverlay').classList.remove('show');
+    if (dialogResolve) { dialogResolve(val); dialogResolve = null; }
+}
+$('dialogOkBtn').onclick = () => closeDialog(true);
+
+// ==================== GitHub API ====================
+async function api(url, method, bodyObj) {
+    const token = getToken();
+    if (!token) throw new Error('未设置 GitHub Token，请在设置页填写');
+    const headers = {
+        'Authorization': 'token ' + token,
+        'Accept': 'application/vnd.github+json',
+        'Content-Type': 'application/json'
+    };
+    const opts = { method, headers };
+    if (bodyObj) opts.body = JSON.stringify(bodyObj);
+    const resp = await fetch(url, opts);
+    if (resp.status === 401) throw new Error('Token 无效或已过期');
+    if (resp.status === 403) throw new Error('无权限（Token 需要 repo 权限）');
+    if (!resp.ok && resp.status !== 404) {
+        const errText = await resp.text().catch(() => '');
+        throw new Error(`API ${resp.status}: ${errText.substring(0,200)}`);
+    }
+    return resp;
+}
+
+async function fetchMessages() {
+    const resp = await api(API_BASE + '?ref=' + BRANCH);
+    if (resp.status === 404) return { msgs: [], sha: null };
+    const d = await resp.json();
+    const content = atob(d.content);
+    let parsed;
+    try { parsed = JSON.parse(content); } catch(e) { parsed = {}; }
+    const msgs = (parsed.messages || (Array.isArray(parsed) ? parsed : []));
+    normalizeIds(msgs);
+    return { msgs, sha: d.sha || null };
+}
+
+async function fetchSha() {
+    const resp = await api(API_BASE + '?ref=' + BRANCH);
+    if (resp.status === 404) return null;
+    const d = await resp.json();
+    return d.sha || null;
+}
+
+async function pushMessages(msgs, currentSha) {
+    normalizeIds(msgs);
+    msgs.sort((a,b) => {
+        const da = a.date||'', db = b.date||'', ia = a.id||'', ib = b.id||'';
+        if (da > db) return -1; if (da < db) return 1;
+        if (ia > ib) return -1; if (ia < ib) return 1;
+        return 0;
+    });
+    const payload = {
+        message: 'chore: update daily popup ' + todayISO(),
+        content: b64enc(JSON.stringify({messages: msgs}, null, 2)),
+        branch: BRANCH
+    };
+    if (currentSha) payload.sha = currentSha;
+    const resp = await api(API_BASE, 'PUT', payload);
+    return resp.status;
+}
+
+function normalizeIds(msgs) {
+    msgs.forEach(m => { if (!m.id) m.id = genId(); });
+}
+
+// ==================== 列表渲染 ====================
+function renderList() {
+    const list = $('msgList');
+    const sorted = [...messages].sort((a,b) => {
+        const da = a.date||'', db = b.date||'', ia = a.id||'', ib = b.id||'';
+        if (da > db) return -1; if (da < db) return 1;
+        if (ia > ib) return -1; if (ia < ib) return 1;
+        return 0;
+    });
+
+    // 同日期计数
+    const dateCnt = {};
+    sorted.forEach(m => { dateCnt[m.date] = (dateCnt[m.date]||0)+1; });
+    const dateSeq = {};
+
+    if (sorted.length === 0) {
+        list.innerHTML = '<div class="empty-state"><div class="icon">📭</div>暂无开示<br><small>点击「新建」添加第一条</small></div>';
+        $('listCount').textContent = '0 条';
+        return;
+    }
+
+    list.innerHTML = '';
+    sorted.forEach(m => {
+        const d = m.date || '?';
+        let seq = '';
+        if (dateCnt[d] > 1) {
+            dateSeq[d] = (dateSeq[d]||0)+1;
+            const nums = ['①','②','③','④','⑤'];
+            seq = '<span class="msg-seq">' + (nums[dateSeq[d]-1]||dateSeq[d]) + '</span>';
+        }
+        const isSelected = editingId && editingId === m.id;
+        const div = document.createElement('div');
+        div.className = 'msg-item' + (isSelected ? ' selected' : '');
+        div.innerHTML =
+            '<div><span class="msg-date">' + d + '</span>' + seq +
+            '<span class="msg-del-hint">点删除移除</span></div>' +
+            '<div class="msg-title">' + (m.title || '（无标题）') + '</div>';
+        div.onclick = () => selectMessage(m.id);
+        list.appendChild(div);
+    });
+
+    $('listCount').textContent = sorted.length + ' 条';
+}
+
+function selectMessage(mid) {
+    const m = messages.find(x => x.id === mid);
+    if (!m) return;
+    editingId = mid;
+    $('inputDate').value = m.date || todayISO();
+    $('inputTitle').value = m.title || '';
+    $('inputContent').value = m.content || '';
+    updateModeBadge();
+    setStatus('编辑：' + (m.date||'?'));
+    renderList(); // 高亮选中项
+    // 滚动到编辑区
+    $('.edit-section').scrollIntoView({ behavior:'smooth' });
+}
+
+function newEntry() {
+    editingId = null;
+    $('inputDate').value = todayISO();
+    $('inputTitle').value = '';
+    $('inputContent').value = '';
+    updateModeBadge();
+    setStatus('新建模式');
+    renderList();
+}
+
+// ==================== 操作 ====================
+async function refreshList() {
+    showLoading('正在拉取开示列表…');
+    try {
+        const result = await fetchMessages();
+        messages = result.msgs;
+        sha = result.sha;
+        renderList();
+        newEntry(); // 刷新后重置为新建模式
+        hideLoading();
+        setStatus('已加载 ' + messages.length + ' 条');
+        showToast('刷新完成：' + messages.length + ' 条', 'ok');
+    } catch(e) {
+        hideLoading();
+        setStatus('拉取失败');
+        showToast('拉取失败：' + e.message, 'err');
+    }
+}
+
+async function doPublish() {
+    const date = $('inputDate').value.trim();
+    let title = $('inputTitle').value.trim();
+    const content = $('inputContent').value.trim();
+
+    if (!date) { showToast('请选择日期', 'err'); return; }
+    if (!content) { showToast('请输入正文内容', 'err'); return; }
+    if (!title) title = '每日开示 · ' + date;
+
+    const mode = editingId ? '更新' : '新增';
+    const confirmBody = editingId
+        ? '将【<b>更新</b>】' + date + ' 的这条开示：<br>《<b>' + title + '》</b>'
+        : '将【<b>新增</b>】一条 ' + date + ' 的开示：<br>《<b>' + title + '》</b><br><br><small>(同日期其他条不会被覆盖)</small>';
+
+    const ok = await showDialog('确认' + mode, confirmBody, mode === '更新' ? '确认更新' : '确认发布');
+    if (!ok) return;
+
+    showLoading('正在' + mode + '…');
+    try {
+        const curSha = await fetchSha();
+        if (editingId) {
+            const target = messages.find(x => x.id === editingId);
+            if (target) { target.date=date; target.title=title; target.content=content; }
+            else {
+                messages.push({id:genId(), date, title, content});
+                editingId = null;
+            }
+        } else {
+            messages.push({id:genId(), date, title, content});
+        }
+        const status = await pushMessages(messages, curSha);
+        hideLoading();
+        showToast(mode + '成功！（HTTP '+status+'）', 'ok');
+        setStatus(mode + '成功：'+date);
+        refreshList();
+    } catch(e) {
+        hideLoading();
+        showToast(mode + '失败：' + e.message, 'err');
+        setStatus(mode + '失败');
+    }
+}
+
+async function doDelete() {
+    if (!editingId) { showToast('请先选中要删除的条目', ''); return; }
+    const m = messages.find(x => x.id === editingId);
+    if (!m) return;
+
+    const ok = await showDialog('确认删除',
+        '确定删除 <b>' + (m.date||'?') + '</b> 的这条开示：<br>《<b>'+(m.title||'')+'</b>》？<br><br><small>只删这一条，同日期其他条不受影响</small>',
+        '确认删除');
+    if (!ok) return;
+
+    showLoading('正在删除…');
+    try {
+        const curSha = await fetchSha();
+        messages = messages.filter(x => x.id !== editingId);
+        await pushMessages(messages, curSha);
+        hideLoading();
+        showToast('已删除', 'ok');
+        newEntry();
+        refreshList();
+    } catch(e) {
+        hideLoading();
+        showToast('删除失败：' + e.message, 'err');
+    }
+}
+
+function saveToken() {
+    const val = $('tokenInput').value.trim();
+    if (!val) { showToast('Token 不能为空', 'err'); return; }
+    setToken(val);
+    showToast('Token 已保存', 'ok');
+    refreshList();
+}
+
+// ==================== 初始化 ====================
+(function init() {
+    $('inputDate').value = todayISO();
+
+    if (!getToken()) {
+        $('tokenBar').style.display = 'flex';
+        showToast('请输入 GitHub Token 以使用发布功能', '');
+    } else {
+        $('tokenBar').style.display = 'none';
+        refreshList();
+    }
+
+    // 自动拉取
+    if (getToken()) refreshList();
+})();
+</script>
+</body>
+</html>

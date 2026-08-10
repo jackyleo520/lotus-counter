@@ -44,6 +44,7 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.ByteArrayOutputStream;
+import java.io.OutputStream;
 import org.json.JSONObject;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -960,6 +961,72 @@ public class MainActivity extends AppCompatActivity {
         @JavascriptInterface
         public void vibrate(long ms) {
             runOnUiThread(() -> doVibrate(ms));
+        }
+
+        // 阅读器：调节屏幕亮度（0.0~1.0；传 -1 恢复系统自动）
+        @JavascriptInterface
+        public void setBrightness(float value) {
+            runOnUiThread(() -> {
+                try {
+                    android.view.WindowManager.LayoutParams lp = getWindow().getAttributes();
+                    if (value < 0) {
+                        lp.screenBrightness = android.view.WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE;
+                    } else {
+                        lp.screenBrightness = Math.max(0.01f, Math.min(1.0f, value));
+                    }
+                    getWindow().setAttributes(lp);
+                } catch (Exception e) {}
+            });
+        }
+
+        // 阅读器：保持屏幕常亮
+        @JavascriptInterface
+        public void setKeepScreenOn(boolean on) {
+            runOnUiThread(() -> {
+                try {
+                    if (on) getWindow().addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+                    else getWindow().clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+                } catch (Exception e) {}
+            });
+        }
+
+        // 阅读器：将 base64 PNG 图片保存到系统相册（Pictures/九品莲台）
+        @JavascriptInterface
+        public void saveImageToGallery(String base64) {
+            runOnUiThread(() -> {
+                try {
+                    String sd = (base64 == null) ? "" : base64;
+                    if (sd.startsWith("data:image")) {
+                        sd = sd.substring(sd.indexOf(",") + 1);
+                    }
+                    byte[] bytes = android.util.Base64.decode(sd, android.util.Base64.DEFAULT);
+                    String name = "lotus_reader_" + System.currentTimeMillis() + ".png";
+                    File dir = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES), "九品莲台");
+                    dir.mkdirs();
+                    File f = new File(dir, name);
+                    FileOutputStream fos = new FileOutputStream(f);
+                    fos.write(bytes); fos.close();
+                    // 通知媒体扫描器
+                    sendBroadcast(new Intent(Intent.ACTION_MEDIA_SCANNER_SCAN_FILE, Uri.fromFile(f)));
+                    webView.evaluateJavascript("if(window.__onImageSaved)window.__onImageSaved(true);", null);
+                } catch (Exception e) {
+                    webView.evaluateJavascript("if(window.__onImageSaved)window.__onImageSaved(false);", null);
+                }
+            });
+        }
+
+        // 阅读器：调用系统分享文本
+        @JavascriptInterface
+        public void shareText(String text) {
+            final String t = (text == null) ? "" : text;
+            runOnUiThread(() -> {
+                try {
+                    Intent intent = new Intent(Intent.ACTION_SEND);
+                    intent.setType("text/plain");
+                    intent.putExtra(Intent.EXTRA_TEXT, t);
+                    startActivity(Intent.createChooser(intent, "分享经文"));
+                } catch (Exception e) {}
+            });
         }
 
         // 意见反馈：内置 QQ 邮箱 SMTP 发送（授权码方式），后台线程执行，结果回传前端

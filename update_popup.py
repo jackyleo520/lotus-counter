@@ -35,7 +35,7 @@ REPO = "jackyleo520/lotus-counter"
 PATH = "popup_messages.json"
 BRANCH = "main"
 # token：优先读环境变量 LOTUS_GH_TOKEN；否则用与 App 一致的公开仓库 token
-TOKEN = os.environ.get("LOTUS_GH_TOKEN") or "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"
+TOKEN = os.environ.get("LOTUS_GH_TOKEN") or os.environ.get("GH_TOKEN") or ""
 API_BASE = f"https://api.github.com/repos/{REPO}/contents/{PATH}"
 
 
